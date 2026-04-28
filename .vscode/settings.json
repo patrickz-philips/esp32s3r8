@@ -12,6 +12,10 @@
     "https_proxy": "http://185.46.212.97:10015",
     "NO_PROXY": "localhost,127.0.0.1,::1",
     "no_proxy": "localhost,127.0.0.1,::1"
-},
-"idf.flashType": "UART"
+  },
+  "idf.flashType": "UART",
+  "git.enabled": true,
+  "git.autoRepositoryDetection": true,
+  "git.openRepositoryInParentFolders": "always",
+  "scm.alwaysShowRepositories": true
 }

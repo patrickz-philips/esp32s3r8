@@ -27,6 +27,22 @@ static const char *TAG = "main";
 static sdmmc_card_t *s_sd_card;
 static esp_lv_decoder_handle_t s_decoder_handle;
 
+static void slide_player_unmount_sdcard(void)
+{
+    if (s_sd_card != NULL) {
+        esp_err_t unmount_ret = esp_vfs_fat_sdcard_unmount(SLIDE_PLAYER_SD_MOUNT_POINT, s_sd_card);
+        if (unmount_ret != ESP_OK) {
+            ESP_LOGW(TAG, "Failed to unmount SD card: %s", esp_err_to_name(unmount_ret));
+        }
+        s_sd_card = NULL;
+    }
+
+    esp_err_t bus_free_ret = spi_bus_free(SPI3_HOST);
+    if (bus_free_ret != ESP_OK && bus_free_ret != ESP_ERR_INVALID_STATE) {
+        ESP_LOGW(TAG, "Failed to free SD SPI bus: %s", esp_err_to_name(bus_free_ret));
+    }
+}
+
 static esp_err_t slide_player_mount_sdcard(void)
 {
     sdmmc_host_t host = SDSPI_HOST_DEFAULT();
@@ -77,8 +93,19 @@ static esp_err_t slide_player_mount_sdcard(void)
 
 static esp_err_t slide_player_runtime_init(void)
 {
-    ESP_RETURN_ON_ERROR(slide_player_mount_sdcard(), TAG, "SD card mount failed");
-    ESP_RETURN_ON_ERROR(esp_lv_decoder_init(&s_decoder_handle), TAG, "LVGL decoder init failed");
+    esp_err_t ret = slide_player_mount_sdcard();
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "SD card mount failed: %s", esp_err_to_name(ret));
+        return ret;
+    }
+
+    ret = esp_lv_decoder_init(&s_decoder_handle);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "LVGL decoder init failed: %s", esp_err_to_name(ret));
+        slide_player_unmount_sdcard();
+        return ret;
+    }
+
     return ESP_OK;
 }
 

@@ -1,3 +1,5 @@
 /slide_player
 /build
 /managed_components
+/.cmake-tools-build
+sdkconfig.old

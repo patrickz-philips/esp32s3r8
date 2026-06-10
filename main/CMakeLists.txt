@@ -1,11 +1,24 @@
-set(SLIDE_PLAYER_DIR ../slide_player)
-set(SLIDE_PLAYER_SOURCES
-    ${SLIDE_PLAYER_DIR}/src/slide_player.c)
+set(LVGL_IN_USED 1)
+
+set(MAIN_SOURCES main.c)
+set(MAIN_INCLUDE_DIRS .)
+
+if(LVGL_IN_USED)
+    set(BATTERY_MONITOR_DIR ../battery_monitor)
+    list(APPEND MAIN_SOURCES ${BATTERY_MONITOR_DIR}/src/battery_monitor.c)
+    list(APPEND MAIN_INCLUDE_DIRS ${BATTERY_MONITOR_DIR}/inc)
+endif()
 
 idf_component_register(
     SRCS
-        main.c
-        ${SLIDE_PLAYER_SOURCES}
+        ${MAIN_SOURCES}
     INCLUDE_DIRS
-        .
-        ${SLIDE_PLAYER_DIR}/inc)
+        ${MAIN_INCLUDE_DIRS}
+    REQUIRES
+        espressif__esp_lv_decoder
+        lvgl__lvgl
+        waveshare__esp32_s3_touch_amoled_2_06)
+
+if(LVGL_IN_USED)
+    target_compile_definitions(${COMPONENT_LIB} PRIVATE LVGL_IN_USED=1)
+endif()

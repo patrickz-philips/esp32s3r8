@@ -2,14 +2,13 @@
 
 #include <cstring>
 
-#include "battery_monitor.h"
 #include "bsp/esp-bsp.h"
-#include "bsp/display.h"
 #include "driver/i2c_master.h"
 #include "esp_check.h"
 #include "esp_err.h"
 #include "esp_log.h"
-#include "lvgl.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
 
 #define XPOWERS_CHIP_AXP2101
 #include "XPowersLib.h"
@@ -19,18 +18,18 @@ namespace {
 constexpr char TAG[] = "pmu_power";
 constexpr uint32_t PMU_I2C_FREQ_HZ = 400000U;
 constexpr int PMU_I2C_TIMEOUT_MS = 1000;
-constexpr uint32_t PMU_UPDATE_PERIOD_MS = 1000U;
+constexpr uint32_t PMU_MUTEX_TIMEOUT_MS = 50U;
 
 XPowersPMU pmu;
 i2c_master_dev_handle_t pmu_dev_handle = nullptr;
-lv_timer_t * pmu_timer = nullptr;
+SemaphoreHandle_t pmu_mutex = nullptr;
 
 int pmu_register_read(uint8_t dev_addr, uint8_t reg_addr, uint8_t * data, uint8_t len)
 {
     (void)dev_addr;
 
     esp_err_t ret = i2c_master_transmit_receive(pmu_dev_handle, &reg_addr, 1, data, len, PMU_I2C_TIMEOUT_MS);
-    if(ret != ESP_OK) {
+    if (ret != ESP_OK) {
         ESP_LOGE(TAG, "PMU read reg 0x%02x failed: %s", reg_addr, esp_err_to_name(ret));
         return -1;
     }
@@ -43,18 +42,18 @@ int pmu_register_write_byte(uint8_t dev_addr, uint8_t reg_addr, uint8_t * data, 
     (void)dev_addr;
 
     uint8_t buffer[16];
-    if(len + 1U > sizeof(buffer)) {
-        ESP_LOGE(TAG, "PMU write too long: %u", static_cast<unsigned int>(len));
+    if (len + 1U > sizeof(buffer)) {
+        ESP_LOGE(TAG, "PMU write too long: %u", (unsigned int)len);
         return -1;
     }
 
     buffer[0] = reg_addr;
-    if(len > 0U) {
+    if (len > 0U) {
         std::memcpy(&buffer[1], data, len);
     }
 
     esp_err_t ret = i2c_master_transmit(pmu_dev_handle, buffer, len + 1U, PMU_I2C_TIMEOUT_MS);
-    if(ret != ESP_OK) {
+    if (ret != ESP_OK) {
         ESP_LOGE(TAG, "PMU write reg 0x%02x failed: %s", reg_addr, esp_err_to_name(ret));
         return -1;
     }
@@ -64,7 +63,7 @@ int pmu_register_write_byte(uint8_t dev_addr, uint8_t reg_addr, uint8_t * data, 
 
 const char * charge_status_text(uint8_t status)
 {
-    switch(status) {
+    switch (status) {
         case XPOWERS_AXP2101_CHG_TRI_STATE:
             return "tri_charge";
         case XPOWERS_AXP2101_CHG_PRE_STATE:
@@ -84,51 +83,34 @@ const char * charge_status_text(uint8_t status)
 
 uint32_t clamp_non_negative(int value)
 {
-    return value > 0 ? static_cast<uint32_t>(value) : 0U;
+    return value > 0 ? (uint32_t)value : 0U;
 }
 
 int32_t temperature_to_x10(float temperature)
 {
-    return static_cast<int32_t>((temperature * 10.0f) + (temperature >= 0.0f ? 0.5f : -0.5f));
+    return (int32_t)((temperature * 10.0f) + (temperature >= 0.0f ? 0.5f : -0.5f));
 }
 
-void publish_pmu_data(void)
+bool take_pmu_mutex(TickType_t timeout_ticks)
 {
-    pmu.getIrqStatus();
-
-    battery_monitor_data_t data = {};
-    data.temperature_x10 = temperature_to_x10(pmu.getTemperature());
-    data.bat_voltage_mv = clamp_non_negative(pmu.getBattVoltage());
-    data.vbus_voltage_mv = clamp_non_negative(pmu.getVbusVoltage());
-    data.system_voltage_mv = clamp_non_negative(pmu.getSystemVoltage());
-    data.bat_percent = pmu.isBatteryConnect() ? pmu.getBatteryPercent() : 0U;
-    data.is_charging = pmu.isCharging() ? 1U : 0U;
-    data.is_discharge = pmu.isDischarge() ? 1U : 0U;
-    data.is_standby = pmu.isStandby() ? 1U : 0U;
-    data.is_vbus_in = pmu.isVbusIn() ? 1U : 0U;
-    data.is_vbus_good = pmu.isVbusGood() ? 1U : 0U;
-    data.charge_status = charge_status_text(pmu.getChargerStatus());
-
-    battery_monitor_set_data(&data);
-
-    pmu.clearIrqStatus();
+    return pmu_mutex != nullptr && xSemaphoreTake(pmu_mutex, timeout_ticks) == pdTRUE;
 }
 
-void pmu_timer_cb(lv_timer_t * timer)
+void give_pmu_mutex(void)
 {
-    (void)timer;
-
-    publish_pmu_data();
+    if (pmu_mutex != nullptr) {
+        xSemaphoreGive(pmu_mutex);
+    }
 }
 
 esp_err_t pmu_i2c_device_init(void)
 {
-    if(pmu_dev_handle != nullptr) {
+    if (pmu_dev_handle != nullptr) {
         return ESP_OK;
     }
 
     i2c_master_bus_handle_t bus_handle = bsp_i2c_get_handle();
-    if(bus_handle == nullptr) {
+    if (bus_handle == nullptr) {
         return ESP_FAIL;
     }
 
@@ -142,7 +124,7 @@ esp_err_t pmu_i2c_device_init(void)
 
 esp_err_t pmu_chip_init(void)
 {
-    if(!pmu.begin(AXP2101_SLAVE_ADDRESS, pmu_register_read, pmu_register_write_byte)) {
+    if (!pmu.begin(AXP2101_SLAVE_ADDRESS, pmu_register_read, pmu_register_write_byte)) {
         ESP_LOGE(TAG, "Init AXP2101 failed");
         return ESP_FAIL;
     }
@@ -159,10 +141,8 @@ esp_err_t pmu_chip_init(void)
 
     pmu.disableIRQ(XPOWERS_AXP2101_ALL_IRQ);
     pmu.clearIrqStatus();
-    pmu.enableIRQ(XPOWERS_AXP2101_BAT_INSERT_IRQ | XPOWERS_AXP2101_BAT_REMOVE_IRQ |
-                  XPOWERS_AXP2101_VBUS_INSERT_IRQ | XPOWERS_AXP2101_VBUS_REMOVE_IRQ |
-                  XPOWERS_AXP2101_PKEY_SHORT_IRQ | XPOWERS_AXP2101_PKEY_LONG_IRQ |
-                  XPOWERS_AXP2101_BAT_CHG_DONE_IRQ | XPOWERS_AXP2101_BAT_CHG_START_IRQ);
+    pmu.enableIRQ(XPOWERS_AXP2101_PKEY_NEGATIVE_IRQ | XPOWERS_AXP2101_PKEY_POSITIVE_IRQ);
+    pmu.disableLongPressShutdown();
 
     pmu.setPrechargeCurr(XPOWERS_AXP2101_PRECHARGE_50MA);
     pmu.setChargerConstantCurr(XPOWERS_AXP2101_CHG_CUR_400MA);
@@ -174,21 +154,60 @@ esp_err_t pmu_chip_init(void)
 
 } // namespace
 
-extern "C" esp_err_t pmu_power_monitor_start(void)
+extern "C" esp_err_t pmu_power_init(void)
 {
-    if(pmu_timer != nullptr) {
-        return ESP_OK;
+    if (pmu_mutex == nullptr) {
+        pmu_mutex = xSemaphoreCreateMutex();
+        ESP_RETURN_ON_FALSE(pmu_mutex != nullptr, ESP_ERR_NO_MEM, TAG, "Failed to create PMU mutex");
     }
 
     ESP_RETURN_ON_ERROR(pmu_i2c_device_init(), TAG, "Failed to add PMU I2C device");
-    ESP_RETURN_ON_ERROR(pmu_chip_init(), TAG, "Failed to initialize AXP2101");
+    return pmu_chip_init();
+}
 
-    pmu_timer = lv_timer_create(pmu_timer_cb, PMU_UPDATE_PERIOD_MS, nullptr);
-    if(pmu_timer == nullptr) {
-        return ESP_ERR_NO_MEM;
+extern "C" esp_err_t pmu_power_read_data(battery_monitor_data_t * data)
+{
+    ESP_RETURN_ON_FALSE(data != nullptr, ESP_ERR_INVALID_ARG, TAG, "Invalid PMU data pointer");
+
+    if (!take_pmu_mutex(pdMS_TO_TICKS(PMU_MUTEX_TIMEOUT_MS))) {
+        return ESP_ERR_TIMEOUT;
     }
 
-    lv_timer_ready(pmu_timer);
+    data->temperature_x10 = temperature_to_x10(pmu.getTemperature());
+    data->bat_voltage_mv = clamp_non_negative(pmu.getBattVoltage());
+    data->vbus_voltage_mv = clamp_non_negative(pmu.getVbusVoltage());
+    data->system_voltage_mv = clamp_non_negative(pmu.getSystemVoltage());
+    data->bat_percent = pmu.isBatteryConnect() ? (uint8_t)pmu.getBatteryPercent() : 0U;
+    data->is_charging = pmu.isCharging() ? 1U : 0U;
+    data->is_discharge = pmu.isDischarge() ? 1U : 0U;
+    data->is_standby = pmu.isStandby() ? 1U : 0U;
+    data->is_vbus_in = pmu.isVbusIn() ? 1U : 0U;
+    data->is_vbus_good = pmu.isVbusGood() ? 1U : 0U;
+    data->charge_status = charge_status_text(pmu.getChargerStatus());
 
+    give_pmu_mutex();
+    return ESP_OK;
+}
+
+extern "C" esp_err_t pmu_power_poll_button(bool * pressed_edge, bool * released_edge)
+{
+    ESP_RETURN_ON_FALSE(pressed_edge != nullptr, ESP_ERR_INVALID_ARG, TAG, "Invalid pressed_edge pointer");
+    ESP_RETURN_ON_FALSE(released_edge != nullptr, ESP_ERR_INVALID_ARG, TAG, "Invalid released_edge pointer");
+
+    *pressed_edge = false;
+    *released_edge = false;
+
+    if (!take_pmu_mutex(pdMS_TO_TICKS(PMU_MUTEX_TIMEOUT_MS))) {
+        return ESP_ERR_TIMEOUT;
+    }
+
+    const uint64_t irq_status = pmu.getIrqStatus();
+    if (irq_status != 0U) {
+        *pressed_edge = pmu.isPekeyNegativeIrq();
+        *released_edge = pmu.isPekeyPositiveIrq();
+        pmu.clearIrqStatus();
+    }
+
+    give_pmu_mutex();
     return ESP_OK;
 }

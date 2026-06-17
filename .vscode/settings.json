@@ -1,5 +1,5 @@
 {
-  "idf.currentSetup": "C:\\Espressif\\frameworks\\esp-idf-v5.5.4",
+  "idf.currentSetup": "/Users/patrickz/esp/esp-idf",
   "idf.openOcdConfigs": [
     "board/esp32s3-builtin.cfg"
   ],
@@ -30,5 +30,6 @@
   "git.enabled": true,
   "git.autoRepositoryDetection": true,
   "git.openRepositoryInParentFolders": "always",
-  "scm.alwaysShowRepositories": true
+  "scm.alwaysShowRepositories": true,
+  "idf.port": "/dev/tty.usbmodem1101"
 }

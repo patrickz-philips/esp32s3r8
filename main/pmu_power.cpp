@@ -145,9 +145,11 @@ esp_err_t pmu_chip_init(void)
     pmu.disableLongPressShutdown();
 
     pmu.setPrechargeCurr(XPOWERS_AXP2101_PRECHARGE_50MA);
-    pmu.setChargerConstantCurr(XPOWERS_AXP2101_CHG_CUR_400MA);
+    pmu.setChargerConstantCurr(XPOWERS_AXP2101_CHG_CUR_300MA);
     pmu.setChargerTerminationCurr(XPOWERS_AXP2101_CHG_ITERM_25MA);
+    pmu.enableChargerTerminationLimit();
     pmu.setChargeTargetVoltage(XPOWERS_AXP2101_CHG_VOL_4V2);
+    pmu.enableCellbatteryCharge();
 
     return ESP_OK;
 }

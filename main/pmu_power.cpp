@@ -5,7 +5,6 @@
 #include "bsp/esp-bsp.h"
 #include "driver/i2c_master.h"
 #include "esp_check.h"
-#include "esp_err.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
@@ -167,7 +166,7 @@ extern "C" esp_err_t pmu_power_init(void)
     return pmu_chip_init();
 }
 
-extern "C" esp_err_t pmu_power_read_data(battery_monitor_data_t * data)
+extern "C" esp_err_t pmu_power_read_data(pmu_power_data_t * data)
 {
     ESP_RETURN_ON_FALSE(data != nullptr, ESP_ERR_INVALID_ARG, TAG, "Invalid PMU data pointer");
 

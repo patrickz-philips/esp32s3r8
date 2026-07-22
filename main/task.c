@@ -7,6 +7,7 @@
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "imu.h"
 #include "model.h"
 #include "pmu_power.h"
 
@@ -16,13 +17,16 @@ static const uint32_t PRESS_SCAN_PERIOD_MS = 10U;
 static const uint32_t BUTTON_DEBOUNCE_MS = 30U;
 static const uint32_t BUTTON_LONG_PRESS_MS = 1500U;
 static const uint32_t HAPTIC_PULSE_MS = 40U;
+static const uint32_t IMU_POLL_PERIOD_MS = 20U;
 
 static const UBaseType_t TASK_PMU_PRIORITY = 1U;
+static const UBaseType_t TASK_IMU_PRIORITY = 2U;
 static const UBaseType_t TASK_PRESS_PRIORITY = 2U;
 static const UBaseType_t TASK_HAPTIC_PRIORITY = 3U;
 static const UBaseType_t TASK_LVGL_PRIORITY = 4U;
 
 static const uint32_t TASK_PMU_STACK_SIZE = 4096U;
+static const uint32_t TASK_IMU_STACK_SIZE = 4096U;
 static const uint32_t TASK_PRESS_STACK_SIZE = 4096U;
 static const uint32_t TASK_HAPTIC_STACK_SIZE = 2048U;
 
@@ -37,6 +41,7 @@ typedef struct {
 } debounced_button_t;
 
 static TaskHandle_t s_task_pmu_handle;
+static TaskHandle_t s_task_imu_handle;
 static TaskHandle_t s_task_press_handle;
 static TaskHandle_t s_task_haptic_handle;
 
@@ -93,9 +98,9 @@ static void process_boot_button(debounced_button_t * state)
     }
 
     const TickType_t held_ticks = now - state->press_start_tick;
-    model_post_button_event(BATTERY_MONITOR_BUTTON_SOURCE_GPIO0,
-                            held_ticks >= pdMS_TO_TICKS(BUTTON_LONG_PRESS_MS) ? BATTERY_MONITOR_BUTTON_PRESS_LONG
-                                                                               : BATTERY_MONITOR_BUTTON_PRESS_SHORT);
+    model_post_button_event(MODEL_BUTTON_SOURCE_GPIO0,
+                            held_ticks >= pdMS_TO_TICKS(BUTTON_LONG_PRESS_MS) ? MODEL_BUTTON_PRESS_LONG
+                                                                             : MODEL_BUTTON_PRESS_SHORT);
 }
 
 static void process_pwron_button(debounced_button_t * state)
@@ -117,9 +122,9 @@ static void process_pwron_button(debounced_button_t * state)
     if (release_edge && state->stable_pressed) {
         state->stable_pressed = false;
         const TickType_t held_ticks = now - state->press_start_tick;
-        model_post_button_event(BATTERY_MONITOR_BUTTON_SOURCE_PWRON,
-                                held_ticks >= pdMS_TO_TICKS(BUTTON_LONG_PRESS_MS) ? BATTERY_MONITOR_BUTTON_PRESS_LONG
-                                                                                   : BATTERY_MONITOR_BUTTON_PRESS_SHORT);
+        model_post_button_event(MODEL_BUTTON_SOURCE_PWRON,
+                                held_ticks >= pdMS_TO_TICKS(BUTTON_LONG_PRESS_MS) ? MODEL_BUTTON_PRESS_LONG
+                                                                                 : MODEL_BUTTON_PRESS_SHORT);
     }
 }
 
@@ -129,7 +134,7 @@ static void task_pmu(void * arg)
 
     TickType_t last_wake_tick = xTaskGetTickCount();
     while (true) {
-        battery_monitor_data_t data = {0};
+        pmu_power_data_t data = {0};
         if (pmu_power_read_data(&data) == ESP_OK) {
             model_post_pmu_data(&data);
         } else {
@@ -137,6 +142,36 @@ static void task_pmu(void * arg)
         }
 
         vTaskDelayUntil(&last_wake_tick, pdMS_TO_TICKS(1000U));
+    }
+}
+
+static void task_imu(void * arg)
+{
+    imu_acc_data_t data = {0};
+    bool first_sample_logged = false;
+    (void)arg;
+
+    TickType_t last_wake_tick = xTaskGetTickCount();
+    while (true) {
+        esp_err_t ret = imu_read_acc(&data);
+        if (ret == ESP_OK) {
+            const acc_data_sample_t sample = {
+                .x = data.x,
+                .y = data.y,
+                .z = data.z,
+            };
+            if (!model_post_acc_data(&sample)) {
+                ESP_LOGW(TAG, "taskIMU failed to post sample to model");
+            } else if (!first_sample_logged) {
+                ESP_LOGI(TAG, "taskIMU first sample: x=%d, y=%d, z=%d",
+                         (int)sample.x, (int)sample.y, (int)sample.z);
+                first_sample_logged = true;
+            }
+        } else {
+            ESP_LOGW(TAG, "taskIMU skipped one sample: %s", esp_err_to_name(ret));
+        }
+
+        vTaskDelayUntil(&last_wake_tick, pdMS_TO_TICKS(IMU_POLL_PERIOD_MS));
     }
 }
 
@@ -176,11 +211,13 @@ esp_err_t app_tasks_start(void)
 {
     BaseType_t ret;
 
-    if (s_task_pmu_handle != NULL && s_task_press_handle != NULL && s_task_haptic_handle != NULL) {
+    if (s_task_pmu_handle != NULL && s_task_imu_handle != NULL &&
+        s_task_press_handle != NULL && s_task_haptic_handle != NULL) {
         return ESP_OK;
     }
 
     ESP_RETURN_ON_ERROR(pmu_power_init(), TAG, "Failed to initialize PMU");
+    ESP_RETURN_ON_ERROR(imu_init(), TAG, "Failed to initialize IMU");
     ESP_RETURN_ON_ERROR(button_gpio_init(), TAG, "Failed to configure GPIO0 button");
     ESP_RETURN_ON_ERROR(haptic_gpio_init(), TAG, "Failed to configure haptic GPIO");
 
@@ -196,11 +233,16 @@ esp_err_t app_tasks_start(void)
                       TASK_PMU_PRIORITY, &s_task_pmu_handle);
     ESP_RETURN_ON_FALSE(ret == pdPASS, ESP_ERR_NO_MEM, TAG, "Failed to create taskPMU");
 
+    ret = xTaskCreate(task_imu, "taskIMU", TASK_IMU_STACK_SIZE, NULL,
+                      TASK_IMU_PRIORITY, &s_task_imu_handle);
+    ESP_RETURN_ON_FALSE(ret == pdPASS, ESP_ERR_NO_MEM, TAG, "Failed to create taskIMU");
+
     ESP_LOGI(TAG,
-             "Task priorities: taskLVGL=%u, taskHaptic=%u, taskPress=%u, taskPMU=%u",
+             "Task priorities: taskLVGL=%u, taskHaptic=%u, taskPress=%u, taskIMU=%u, taskPMU=%u",
              (unsigned int)TASK_LVGL_PRIORITY,
              (unsigned int)TASK_HAPTIC_PRIORITY,
              (unsigned int)TASK_PRESS_PRIORITY,
+             (unsigned int)TASK_IMU_PRIORITY,
              (unsigned int)TASK_PMU_PRIORITY);
 
     return ESP_OK;

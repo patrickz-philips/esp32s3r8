@@ -4,12 +4,13 @@ set(MAIN_SOURCES main.c)
 set(MAIN_INCLUDE_DIRS .)
 
 if(LVGL_IN_USED)
-    set(BATTERY_MONITOR_DIR ../battery_monitor)
-    list(APPEND MAIN_SOURCES ${BATTERY_MONITOR_DIR}/src/battery_monitor.c)
-    list(APPEND MAIN_SOURCES ${BATTERY_MONITOR_DIR}/src/model.c)
+    set(ACC_DATA_DIR ../acc_data)
+    list(APPEND MAIN_SOURCES ${ACC_DATA_DIR}/src/acc_data.c)
+    list(APPEND MAIN_SOURCES ${ACC_DATA_DIR}/src/model.c)
     list(APPEND MAIN_SOURCES task.c)
+    list(APPEND MAIN_SOURCES imu.c)
     list(APPEND MAIN_SOURCES pmu_power.cpp)
-    list(APPEND MAIN_INCLUDE_DIRS ${BATTERY_MONITOR_DIR}/inc)
+    list(APPEND MAIN_INCLUDE_DIRS ${ACC_DATA_DIR}/inc)
 endif()
 
 idf_component_register(
@@ -23,6 +24,7 @@ idf_component_register(
         esp_driver_i2c
         lvgl__lvgl
         XPowersLib
+        waveshare__qmi8658
         waveshare__esp32_s3_touch_amoled_2_06)
 
 if(LVGL_IN_USED)

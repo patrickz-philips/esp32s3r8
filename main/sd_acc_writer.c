@@ -10,6 +10,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/task.h"
+#include "sdmmc_cmd.h"
 
 static const char * TAG = "sd_acc_writer";
 static const UBaseType_t WRITER_COMMAND_QUEUE_LENGTH = 4U;
@@ -28,6 +29,7 @@ static QueueHandle_t s_sample_queue;
 static TaskHandle_t s_writer_task_handle;
 static uint32_t s_next_file_index;
 static volatile bool s_accepting_samples;
+static bool s_sdcard_mounted;
 
 static uint32_t find_next_file_index(void);
 
@@ -53,6 +55,23 @@ static void unmount_sdcard(void)
         ESP_LOGW(TAG, "Failed to unmount SD card: %s", esp_err_to_name(ret));
     }
     bsp_sdcard = NULL;
+}
+
+static void check_sdcard(void)
+{
+    if (s_sdcard_mounted) {
+        const esp_err_t ret = sdmmc_get_status(bsp_sdcard);
+        if (ret == ESP_OK) {
+            ESP_LOGI(TAG, "SD card status: mounted");
+            return;
+        }
+
+        ESP_LOGW(TAG, "SD card is no longer available: %s", esp_err_to_name(ret));
+        unmount_sdcard();
+        s_sdcard_mounted = false;
+    }
+
+    s_sdcard_mounted = try_mount_sdcard();
 }
 
 static uint32_t find_next_file_index(void)
@@ -133,16 +152,15 @@ static void task_sd_acc_writer(void * arg)
     char path[64] = {0};
     uint32_t sample_count = 0U;
     bool stop_requested = false;
-    bool sdcard_mounted = false;
-    TickType_t last_mount_attempt = xTaskGetTickCount() - pdMS_TO_TICKS(SD_MOUNT_RETRY_PERIOD_MS);
+    TickType_t last_sdcard_check = xTaskGetTickCount() - pdMS_TO_TICKS(SD_MOUNT_RETRY_PERIOD_MS);
     (void)arg;
 
     while (true) {
         const TickType_t now = xTaskGetTickCount();
-        if (!sdcard_mounted &&
-            (now - last_mount_attempt) >= pdMS_TO_TICKS(SD_MOUNT_RETRY_PERIOD_MS)) {
-            last_mount_attempt = now;
-            sdcard_mounted = try_mount_sdcard();
+        if (file == NULL &&
+            (now - last_sdcard_check) >= pdMS_TO_TICKS(SD_MOUNT_RETRY_PERIOD_MS)) {
+            last_sdcard_check = now;
+            check_sdcard();
         }
 
         const bool command_received = xQueueReceive(s_command_queue, &command, 0) == pdTRUE;
@@ -151,9 +169,12 @@ static void task_sd_acc_writer(void * arg)
                 ESP_LOGW(TAG, "Ignoring start request while recording");
                 continue;
             }
-            if (!sdcard_mounted) {
+
+            check_sdcard();
+            last_sdcard_check = xTaskGetTickCount();
+            if (!s_sdcard_mounted) {
                 ESP_LOGW(TAG, "Cannot start recording because no SD card is mounted");
-                model_post_sd_save_finished(false);
+                model_post_sdcard_missing();
                 continue;
             }
             file = open_next_file(path, sizeof(path));
@@ -162,8 +183,8 @@ static void task_sd_acc_writer(void * arg)
             if (file == NULL) {
                 model_post_sd_save_finished(false);
                 unmount_sdcard();
-                sdcard_mounted = false;
-                last_mount_attempt = xTaskGetTickCount();
+                s_sdcard_mounted = false;
+                last_sdcard_check = xTaskGetTickCount();
             } else {
                 s_accepting_samples = true;
                 ESP_LOGI(TAG, "Recording started: %s", path);
@@ -184,8 +205,8 @@ static void task_sd_acc_writer(void * arg)
                 ESP_LOGE(TAG, "Failed to write sample to %s", path);
                 finish_recording(&file, path, sample_count, false);
                 unmount_sdcard();
-                sdcard_mounted = false;
-                last_mount_attempt = xTaskGetTickCount();
+                s_sdcard_mounted = false;
+                last_sdcard_check = xTaskGetTickCount();
                 continue;
             }
 
@@ -201,16 +222,16 @@ static void task_sd_acc_writer(void * arg)
                 } else if (!close_current_file(&file, path, sample_count)) {
                     finish_recording(&file, path, sample_count, false);
                     unmount_sdcard();
-                    sdcard_mounted = false;
-                    last_mount_attempt = xTaskGetTickCount();
+                    s_sdcard_mounted = false;
+                    last_sdcard_check = xTaskGetTickCount();
                 } else {
                     file = open_next_file(path, sizeof(path));
                     sample_count = 0U;
                     if (file == NULL) {
                         finish_recording(&file, path, sample_count, false);
                         unmount_sdcard();
-                        sdcard_mounted = false;
-                        last_mount_attempt = xTaskGetTickCount();
+                        s_sdcard_mounted = false;
+                        last_sdcard_check = xTaskGetTickCount();
                     } else {
                         ESP_LOGI(TAG, "Recording continued: %s", path);
                     }

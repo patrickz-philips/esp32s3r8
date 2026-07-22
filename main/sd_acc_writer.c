@@ -96,20 +96,32 @@ static FILE * open_next_file(char * path, size_t path_size)
     return file;
 }
 
-static void close_recording(FILE ** file, const char * path, uint32_t sample_count, bool success)
+static bool close_current_file(FILE ** file, const char * path, uint32_t sample_count)
 {
-    if (*file != NULL) {
-        if (fclose(*file) != 0) {
-            ESP_LOGE(TAG, "Failed to close %s", path);
-            success = false;
-        }
-        *file = NULL;
+    if (*file == NULL) {
+        return true;
     }
 
-    ESP_LOGI(TAG, "Recording finished: file=%s, samples=%lu, success=%d",
-             path, (unsigned long)sample_count, success);
+    const int close_result = fclose(*file);
+    *file = NULL;
+    if (close_result != 0) {
+        ESP_LOGE(TAG, "Failed to close %s", path);
+        return false;
+    }
+
+    ESP_LOGI(TAG, "CSV file saved: file=%s, samples=%lu", path, (unsigned long)sample_count);
+    return true;
+}
+
+static void finish_recording(FILE ** file, const char * path, uint32_t sample_count, bool success)
+{
+    if (!close_current_file(file, path, sample_count)) {
+        success = false;
+    }
+
     s_accepting_samples = false;
     xQueueReset(s_sample_queue);
+    ESP_LOGI(TAG, "Recording session finished: success=%d", success);
     model_post_sd_save_finished(success);
 }
 
@@ -162,7 +174,7 @@ static void task_sd_acc_writer(void * arg)
             }
             stop_requested = true;
             if (sample_count == SD_ACC_SAMPLE_COUNT) {
-                close_recording(&file, path, sample_count, true);
+                finish_recording(&file, path, sample_count, true);
             }
         }
 
@@ -170,7 +182,7 @@ static void task_sd_acc_writer(void * arg)
             file != NULL && sample_count < SD_ACC_SAMPLE_COUNT) {
             if (fprintf(file, "%d,%d,%d\n", (int)sample.x, (int)sample.y, (int)sample.z) < 0) {
                 ESP_LOGE(TAG, "Failed to write sample to %s", path);
-                close_recording(&file, path, sample_count, false);
+                finish_recording(&file, path, sample_count, false);
                 unmount_sdcard();
                 sdcard_mounted = false;
                 last_mount_attempt = xTaskGetTickCount();
@@ -179,10 +191,29 @@ static void task_sd_acc_writer(void * arg)
 
             sample_count++;
             if (sample_count == SD_ACC_SAMPLE_COUNT) {
-                s_accepting_samples = false;
-                xQueueReset(s_sample_queue);
+                if (!stop_requested && xQueueReceive(s_command_queue, &command, 0) == pdTRUE &&
+                    command == WRITER_COMMAND_STOP) {
+                    stop_requested = true;
+                }
+
                 if (stop_requested) {
-                    close_recording(&file, path, sample_count, true);
+                    finish_recording(&file, path, sample_count, true);
+                } else if (!close_current_file(&file, path, sample_count)) {
+                    finish_recording(&file, path, sample_count, false);
+                    unmount_sdcard();
+                    sdcard_mounted = false;
+                    last_mount_attempt = xTaskGetTickCount();
+                } else {
+                    file = open_next_file(path, sizeof(path));
+                    sample_count = 0U;
+                    if (file == NULL) {
+                        finish_recording(&file, path, sample_count, false);
+                        unmount_sdcard();
+                        sdcard_mounted = false;
+                        last_mount_attempt = xTaskGetTickCount();
+                    } else {
+                        ESP_LOGI(TAG, "Recording continued: %s", path);
+                    }
                 }
             }
         }

@@ -41,9 +41,9 @@ The `LVGL_IN_USED` switch in `main/CMakeLists.txt` controls whether the current 
 
 ### SD Card Recording
 
-The application mounts the board microSD card at startup and scans files named `acc_<index>.csv`. Each new recording uses the next index after the largest existing one. A CSV starts with the `x,y,z` header and contains exactly 3000 raw accelerometer LSB samples collected at the IMU task's 20 ms period.
+The SD writer task mounts the board microSD card in the background and scans files named `acc_<index>.csv`. Each new file uses the next index after the largest existing one. A CSV starts with the `x,y,z` header and contains exactly 3000 raw accelerometer LSB samples collected at the IMU task's 20 ms period.
 
-Pressing the Boot button starts a new recording and the green stopwatch indicator. Pressing it again stops the indicator and shows `saving`; the SD writer continues until the file contains 3000 samples, closes the file, and changes the status to `finish`. A write failure changes the status to `error`.
+Pressing the Boot button starts recording and the green stopwatch indicator. Every 3000 samples, the writer closes the current CSV and immediately continues in the next numbered CSV. Pressing Boot again requests a wait stop, stops the indicator, and shows `saving`; the writer completes the current 3000-sample CSV before ending the recording session and changing the status to `finish`. A write failure changes the status to `error`.
 
 ## Project Structure
 

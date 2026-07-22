@@ -27,6 +27,7 @@ typedef struct {
 esp_err_t pmu_power_init(void);
 esp_err_t pmu_power_read_data(pmu_power_data_t * data);
 esp_err_t pmu_power_poll_button(bool * pressed_edge, bool * released_edge);
+esp_err_t pmu_power_shutdown(void);
 
 #ifdef __cplusplus
 }

@@ -212,3 +212,15 @@ extern "C" esp_err_t pmu_power_poll_button(bool * pressed_edge, bool * released_
     give_pmu_mutex();
     return ESP_OK;
 }
+
+extern "C" esp_err_t pmu_power_shutdown(void)
+{
+    if (!take_pmu_mutex(pdMS_TO_TICKS(PMU_MUTEX_TIMEOUT_MS))) {
+        return ESP_ERR_TIMEOUT;
+    }
+
+    ESP_LOGI(TAG, "Requesting AXP2101 software shutdown");
+    pmu.shutdown();
+    give_pmu_mutex();
+    return ESP_OK;
+}

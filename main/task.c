@@ -17,6 +17,7 @@ static const char * TAG = "app_task";
 static const uint32_t PRESS_SCAN_PERIOD_MS = 10U;
 static const uint32_t BUTTON_DEBOUNCE_MS = 30U;
 static const uint32_t BUTTON_LONG_PRESS_MS = 1500U;
+static const uint32_t PWRON_SHUTDOWN_PRESS_MS = 3000U;
 static const uint32_t HAPTIC_PULSE_MS = 40U;
 static const uint32_t IMU_POLL_PERIOD_MS = 20U;
 
@@ -123,6 +124,14 @@ static void process_pwron_button(debounced_button_t * state)
     if (release_edge && state->stable_pressed) {
         state->stable_pressed = false;
         const TickType_t held_ticks = now - state->press_start_tick;
+        if (held_ticks >= pdMS_TO_TICKS(PWRON_SHUTDOWN_PRESS_MS)) {
+            esp_err_t ret = pmu_power_shutdown();
+            if (ret != ESP_OK) {
+                ESP_LOGE(TAG, "Failed to shut down PMU: %s", esp_err_to_name(ret));
+            }
+            return;
+        }
+
         model_post_button_event(MODEL_BUTTON_SOURCE_PWRON,
                                 held_ticks >= pdMS_TO_TICKS(BUTTON_LONG_PRESS_MS) ? MODEL_BUTTON_PRESS_LONG
                                                                                  : MODEL_BUTTON_PRESS_SHORT);

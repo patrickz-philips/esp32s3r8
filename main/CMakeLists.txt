@@ -10,6 +10,7 @@ if(LVGL_IN_USED)
     list(APPEND MAIN_SOURCES task.c)
     list(APPEND MAIN_SOURCES imu.c)
     list(APPEND MAIN_SOURCES pmu_power.cpp)
+    list(APPEND MAIN_SOURCES sd_acc_writer.c)
     list(APPEND MAIN_INCLUDE_DIRS ${ACC_DATA_DIR}/inc)
 endif()
 
@@ -24,6 +25,7 @@ idf_component_register(
         esp_driver_i2c
         lvgl__lvgl
         XPowersLib
+        fatfs
         waveshare__qmi8658
         waveshare__esp32_s3_touch_amoled_2_06)
 

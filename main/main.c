@@ -3,6 +3,7 @@
 #ifdef LVGL_IN_USED
 #include "acc_data.h"
 #include "model.h"
+#include "sd_acc_writer.h"
 #include "task.h"
 #endif
 
@@ -16,8 +17,12 @@ void app_main(void)
 #ifdef LVGL_IN_USED
     acc_data_ui_init();
     ESP_ERROR_CHECK(model_init());
-    ESP_ERROR_CHECK(app_tasks_start());
 #endif
 
     bsp_display_unlock();
+
+#ifdef LVGL_IN_USED
+    ESP_ERROR_CHECK(sd_acc_writer_init());
+    ESP_ERROR_CHECK(app_tasks_start());
+#endif
 }

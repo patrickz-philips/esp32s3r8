@@ -10,6 +10,7 @@
 #include "imu.h"
 #include "model.h"
 #include "pmu_power.h"
+#include "sd_acc_writer.h"
 
 static const char * TAG = "app_task";
 
@@ -166,6 +167,9 @@ static void task_imu(void * arg)
                 ESP_LOGI(TAG, "taskIMU first sample: x=%d, y=%d, z=%d",
                          (int)sample.x, (int)sample.y, (int)sample.z);
                 first_sample_logged = true;
+            }
+            if (!sd_acc_writer_post_sample(&sample)) {
+                ESP_LOGW(TAG, "taskIMU failed to post sample to SD writer");
             }
         } else {
             ESP_LOGW(TAG, "taskIMU skipped one sample: %s", esp_err_to_name(ret));

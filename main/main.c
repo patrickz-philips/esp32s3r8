@@ -7,10 +7,22 @@
 #include "task.h"
 #endif
 
+static const BaseType_t LVGL_TASK_CORE = 0;
+
 void app_main(void)
 {
+    bsp_display_cfg_t display_config = {
+        .lvgl_port_cfg = ESP_LVGL_PORT_INIT_CONFIG(),
+        .buffer_size = BSP_LCD_DRAW_BUFF_SIZE,
+        .double_buffer = BSP_LCD_DRAW_BUFF_DOUBLE,
+        .flags = {
+            .buff_dma = false,
+            .buff_spiram = true,
+        },
+    };
+    display_config.lvgl_port_cfg.task_affinity = LVGL_TASK_CORE;
 
-    bsp_display_start();
+    bsp_display_start_with_config(&display_config);
 
     bsp_display_lock(-1);
 

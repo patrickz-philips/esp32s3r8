@@ -20,6 +20,7 @@ static const uint32_t BUTTON_LONG_PRESS_MS = 1500U;
 static const uint32_t PWRON_SHUTDOWN_PRESS_MS = 3000U;
 static const uint32_t HAPTIC_PULSE_MS = 40U;
 static const uint32_t IMU_POLL_PERIOD_MS = 20U;
+static const uint32_t SD_DROP_LOG_PERIOD_MS = 1000U;
 
 static const UBaseType_t TASK_PMU_PRIORITY = 1U;
 static const UBaseType_t TASK_IMU_PRIORITY = 2U;
@@ -159,6 +160,8 @@ static void task_imu(void * arg)
 {
     imu_acc_data_t data = {0};
     bool first_sample_logged = false;
+    uint32_t dropped_sd_samples = 0U;
+    TickType_t last_sd_drop_log_tick = xTaskGetTickCount() - pdMS_TO_TICKS(SD_DROP_LOG_PERIOD_MS);
     (void)arg;
 
     TickType_t last_wake_tick = xTaskGetTickCount();
@@ -178,7 +181,14 @@ static void task_imu(void * arg)
                 first_sample_logged = true;
             }
             if (!sd_acc_writer_post_sample(&sample)) {
-                ESP_LOGW(TAG, "taskIMU failed to post sample to SD writer");
+                dropped_sd_samples++;
+                const TickType_t now = xTaskGetTickCount();
+                if ((now - last_sd_drop_log_tick) >= pdMS_TO_TICKS(SD_DROP_LOG_PERIOD_MS)) {
+                    ESP_LOGW(TAG, "SD writer queue full, dropped %lu samples",
+                             (unsigned long)dropped_sd_samples);
+                    dropped_sd_samples = 0U;
+                    last_sd_drop_log_tick = now;
+                }
             }
         } else {
             ESP_LOGW(TAG, "taskIMU skipped one sample: %s", esp_err_to_name(ret));

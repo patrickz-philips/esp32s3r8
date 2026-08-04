@@ -18,6 +18,10 @@
   "cmake.configureOnOpen": false,
   "cmake.useCMakePresets": "never",
   "cmake.buildDirectory": "${workspaceFolder}/.cmake-tools-build",
+  "cmake.configureEnvironment": {
+    "IDF_PATH": "/Users/patrickz/esp/esp-idf",
+    "IDF_TARGET": "esp32s3"
+  },
   "git.enabled": true,
   "git.autoRepositoryDetection": true,
   "git.openRepositoryInParentFolders": "always",

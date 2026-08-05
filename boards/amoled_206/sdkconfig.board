@@ -1,0 +1,4 @@
+# Board-specific sdkconfig overrides for AMOLED 2.06" (applied after sdkconfig.defaults).
+CONFIG_ESPTOOLPY_FLASHSIZE_32MB=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="boards/amoled_206/partitions.csv"
+# CONFIG_LV_USE_PERF_MONITOR is not set

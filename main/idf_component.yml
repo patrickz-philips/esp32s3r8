@@ -1,7 +1,7 @@
 ## IDF Component Manager Manifest File
+## Common dependencies only. Board-specific dependencies live in
+## boards/<board>/idf_component.yml and are installed per selected board.
 dependencies:
-  waveshare/esp32_s3_touch_amoled_1_75:
-    version: "*"
   lvgl/lvgl:
     version: "9.4.*"
     public: true

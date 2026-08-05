@@ -1,0 +1,4 @@
+## Board-specific managed dependencies (installed only when this board is selected).
+dependencies:
+  waveshare/esp32_s3_touch_amoled_1_75:
+    version: "*"

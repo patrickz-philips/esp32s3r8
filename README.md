@@ -31,22 +31,31 @@ The project is organized as a small layered application:
 
 ```text
 .
-|-- CMakeLists.txt                # Project CMake entry
+|-- CMakeLists.txt                # Project entry (resolves BOARD + LVGL_PROJECT)
+|-- switch_board.sh               # Two-stage selector (board, then app)
+|-- boards/
+|   |-- amoled_175/               # AMOLED 1.75" board profile
+|   `-- amoled_206/               # AMOLED 2.06" board profile
+|-- components/
+|   `-- XPowersLib/               # PMU driver (used by acc_data/battery_monitor)
+|-- lvgl/                         # LVGL applications (git submodules)
+|   |-- slide_player/             # PNG slideshow
+|   |-- acc_data/                 # accelerometer logger
+|   `-- battery_monitor/          # battery / PMU monitor
 |-- main/
-|   |-- CMakeLists.txt            # Registers main + slide_player/src
-|   |-- idf_component.yml         # Component dependencies
-|   `-- main.c                    # App entry and runtime init
-|-- slide_player/
-|   |-- inc/
-|   |   `-- slide_player.h        # Public UI API
-|   |-- src/
-|   |   `-- slide_player.c        # UI logic and gesture handling
-|   `-- assets/
-|       |-- *.png                 # Runtime image assets on SD card
-|       `-- convert_image.py      # PNG-to-C helper script (optional)
-|-- sdkconfig                     # Current project configuration
-`-- dependencies.lock             # Locked component versions
+|   |-- CMakeLists.txt            # Selects app sources by LVGL_PROJECT
+|   |-- idf_component.yml         # Common component dependencies
+|   |-- app_slide_player.c        # Entry for slide_player
+|   |-- app_acc_data.c            # Entry for acc_data
+|   |-- app_battery_monitor.c     # Entry for battery_monitor
+|   `-- imu.c / pmu_power.cpp / task.c / sd_acc_writer.c  # app glue drivers
+|-- sdkconfig.defaults            # Common configuration
+`-- sdkconfig.<board>             # Generated per-board config (gitignored)
 ```
+
+The `lvgl/*` applications are tracked as git submodules; clone with
+`git clone --recurse-submodules`, or after cloning run
+`git submodule update --init --recursive`.
 
 ## Key Dependencies
 
@@ -59,20 +68,58 @@ See `main/idf_component.yml` and `dependencies.lock` for exact dependency defini
 
 ## Build and Flash
 
-Use ESP-IDF environment first, then build/flash as usual:
+A build is defined by two independent selections: the **board** (hardware) and the
+**LVGL project** (application). Use the two-stage selector:
 
 ```bash
-idf.py build
-idf.py -p <PORT> flash monitor
+./switch_board.sh
+#   Step 1/2 - Select board          (shows current, '=>' marks it)
+#   Step 2/2 - Select lvgl project   (shows current)
+#   Enter = keep current, q = quit
 ```
 
-Example on Windows PowerShell (if needed):
+It writes `./.board` and `./.lvgl_project`, then prints the ready-to-run commands:
 
-```powershell
-$env:IDF_PATH = "C:\Espressif\frameworks\esp-idf-v5.5.4"
-idf.py build
-idf.py -p COM3 flash monitor
+```bash
+idf.py -DBOARD=amoled_175 -DLVGL_PROJECT=slide_player -B build/amoled_175_slide_player build
+idf.py -B build/amoled_175_slide_player -p <PORT> flash monitor
 ```
+
+Each board+project pair uses its own build directory so configs never mix.
+
+## Multi-board / Multi-app Support
+
+Both `BOARD` and `LVGL_PROJECT` resolve in the same priority order:
+`-D<VAR>=<name>` -> environment variable -> persisted file (`./.board` /
+`./.lvgl_project`) -> default (`amoled_175` / `slide_player`).
+
+| Board id | Hardware |
+|----------|----------|
+| `amoled_175` | Waveshare ESP32-S3 Touch AMOLED 1.75" |
+| `amoled_206` | Waveshare ESP32-S3 Touch AMOLED 2.06" |
+
+| LVGL project | App | Recommended board |
+|--------------|-----|-------------------|
+| `slide_player` | PNG slideshow (gestures) | `amoled_175` |
+| `acc_data` | Accelerometer logger (IMU + PMU) | `amoled_206` |
+| `battery_monitor` | Battery / PMU monitor (AXP2101) | `amoled_206` |
+
+Each board is self-contained under `boards/<board>/`:
+
+```text
+boards/<board>/
+|-- CMakeLists.txt      # board component (carries managed deps)
+|-- idf_component.yml   # board-specific managed dependencies
+|-- board_config.h      # capability flags + pin map
+|-- sdkconfig.board     # board sdkconfig overrides (flash size, partition file)
+`-- partitions.csv      # board partition table
+```
+
+The top-level `CMakeLists.txt` reads `BOARD` (wires `EXTRA_COMPONENT_DIRS`,
+per-board `SDKCONFIG` and layered `SDKCONFIG_DEFAULTS`) and `LVGL_PROJECT`.
+`main/CMakeLists.txt` picks the entry file (`app_<project>.c`) and application
+sources from `lvgl/<project>/`.
+
 
 ## Slide Asset Requirements
 

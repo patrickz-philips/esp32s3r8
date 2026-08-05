@@ -1,0 +1,12 @@
+[submodule "lvgl/acc_data"]
+	path = lvgl/acc_data
+	url = https://github.com/patrickz-philips/lvgl_acc_data
+	branch = main
+[submodule "lvgl/slide_player"]
+	path = lvgl/slide_player
+	url = https://github.com/patrickz-philips/lvgl_silde_player
+	branch = feature/sdcard
+[submodule "lvgl/battery_monitor"]
+	path = lvgl/battery_monitor
+	url = https://github.com/patrickz-philips/lvgl_battery_monitor
+	branch = feature/axp2101

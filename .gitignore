@@ -1,5 +1,10 @@
-/slide_player
 /build
 /managed_components
 /.cmake-tools-build
 sdkconfig.old
+# Per-board generated sdkconfig files (source of truth: sdkconfig.defaults + boards/<board>/sdkconfig.board)
+/sdkconfig.amoled_175
+/sdkconfig.amoled_206
+# Local board selection written by switch_board.sh
+/.board
+/.lvgl_project

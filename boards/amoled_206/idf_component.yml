@@ -1,0 +1,8 @@
+## Board-specific managed dependencies (installed only when this board is selected).
+dependencies:
+  waveshare/esp32_s3_touch_amoled_2_06:
+    version: "*"
+  waveshare/qmi8658:
+    version: "1.0.0"
+  espressif/esp_lv_decoder:
+    version: "*"

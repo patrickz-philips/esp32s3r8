@@ -48,7 +48,7 @@ The project is organized as a small layered application:
 |   |-- app_slide_player.c        # Entry for slide_player
 |   |-- app_acc_data.c            # Entry for acc_data
 |   |-- app_battery_monitor.c     # Entry for battery_monitor
-|   `-- imu.c / pmu_power.cpp / task.c / sd_acc_writer.c  # app glue drivers
+|   `-- imu.c / pmu_power.cpp / sd_acc_writer.c  # app glue drivers
 |-- sdkconfig.defaults            # Common configuration
 `-- sdkconfig.<board>             # Generated per-board config (gitignored)
 ```

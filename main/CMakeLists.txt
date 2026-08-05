@@ -15,8 +15,7 @@ elseif(LVGL_PROJECT STREQUAL "acc_data")
         ${LVGL_DIR}/src/model.c
         imu.c
         pmu_power.cpp
-        sd_acc_writer.c
-        task.c)
+        sd_acc_writer.c)
 
 elseif(LVGL_PROJECT STREQUAL "battery_monitor")
     list(APPEND MAIN_SRCS

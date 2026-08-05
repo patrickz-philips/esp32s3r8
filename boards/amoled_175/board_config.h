@@ -10,9 +10,4 @@
 #define BOARD_FEATURE_SLIDE_PLAYER 1
 #define BOARD_FEATURE_ACC_DATA     0
 
-// SD card is wired over SPI on this board.
-#define BOARD_SD_MOUNT_POINT    "/sdcard"
-#define BOARD_SD_PIN_CS         41
-#define BOARD_SD_PIN_MOSI       1
-#define BOARD_SD_PIN_MISO       3
-#define BOARD_SD_PIN_SCK        2
+// SD card is mounted via the board BSP (bsp_sdcard_mount); wiring lives there.

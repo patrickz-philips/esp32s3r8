@@ -10,3 +10,7 @@
 	path = lvgl/battery_monitor
 	url = https://github.com/patrickz-philips/lvgl_battery_monitor
 	branch = feature/axp2101
+[submodule "lvgl/salary_cat"]
+	path = lvgl/salary_cat
+	url = https://github.com/patrickz-philips/lvgl_salary_cat.git
+	branch = main

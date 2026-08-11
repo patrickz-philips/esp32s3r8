@@ -1,4 +1,14 @@
 dependencies:
+  chmorgan/esp-libhelix-mp3:
+    component_hash: cbb76089dc2c5749f7b470e2e70aedc44c9da519e04eb9a67d4c7ec275229e53
+    dependencies:
+    - name: idf
+      require: private
+      version: '>=4.1.0'
+    source:
+      registry_url: https://components.espressif.com/
+      type: service
+    version: 1.0.3
   espressif/cmake_utilities:
     component_hash: 351350613ceafba240b761b4ea991e0f231ac7a9f59a9ee901f751bddc0bb18f
     dependencies:
@@ -106,7 +116,7 @@ dependencies:
     - esp32h4
     version: 0.4.3
   espressif/esp_lvgl_port:
-    component_hash: fb6c1fdfe70d4ca39a035d63ca394a35f17ec84ce16ff98ecb13a54155d75da4
+    component_hash: d3c020b45c3dfc0d1706a83b63a1c34a6eb444a6e935f9afff79f92b7b94dcef
     dependencies:
     - name: idf
       require: private
@@ -118,7 +128,7 @@ dependencies:
     source:
       registry_url: https://components.espressif.com
       type: service
-    version: 2.8.0~1
+    version: 2.9.0
   espressif/esp_new_jpeg:
     component_hash: e1e7e6991193c41ed6c9fc386702aa7821433319e7aa9c3147cd3236310cd69c
     dependencies: []
@@ -240,10 +250,11 @@ dependencies:
       type: service
     version: 1.0.0
 direct_dependencies:
+- chmorgan/esp-libhelix-mp3
 - espressif/esp_lv_decoder
 - lvgl/lvgl
 - waveshare/esp32_s3_touch_amoled_2_06
 - waveshare/qmi8658
-manifest_hash: 3ef26dd1b48c43effc5bfba222d1012f17f90fc1e414d297a72583b941190177
+manifest_hash: c6b0ab9fcca66f59c8d7da3b48460d7092fef9646748ca10851ac74ff529f5aa
 target: esp32s3
 version: 2.0.0

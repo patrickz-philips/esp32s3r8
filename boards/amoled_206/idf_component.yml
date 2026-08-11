@@ -1,8 +1,16 @@
 ## Board-specific managed dependencies (installed only when this board is selected).
+## The AXP2101 PMU driver is the local components/XPowersLib; LVGL comes from the
+## common main/idf_component.yml. Everything else the apps need is listed here.
 dependencies:
+  # BSP: SH8601 display, FT5x06 touch, esp_codec_dev, esp_lvgl_port, SD/I2C wiring.
   waveshare/esp32_s3_touch_amoled_2_06:
     version: "*"
+  # QMI8658 6-axis IMU driver (acc_data app: imu.c).
   waveshare/qmi8658:
     version: "1.0.0"
+  # PNG/JPEG decoder for LVGL image rendering (slide_player app).
   espressif/esp_lv_decoder:
     version: "*"
+  # Helix MP3 decoder (salary_cat app: audio_player.c streams MP3 -> ES8311).
+  chmorgan/esp-libhelix-mp3:
+    version: "^1.0.3"

@@ -2,3 +2,8 @@
 CONFIG_ESPTOOLPY_FLASHSIZE_32MB=y
 CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="boards/amoled_206/partitions.csv"
 # CONFIG_LV_USE_PERF_MONITOR is not set
+# salary_cat app: LVGL GIF decoder for SD-card GIF playback.
+CONFIG_LV_USE_GIF=y
+# Smaller LVGL draw stripe so two DMA-capable internal draw buffers (double
+# buffering) fit in internal RAM alongside SD/I2S DMA.
+CONFIG_BSP_DISPLAY_LVGL_BUF_HEIGHT=60

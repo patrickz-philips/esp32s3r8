@@ -2,12 +2,19 @@
 # Both are resolved in the top-level CMakeLists.txt.
 set(LVGL_DIR "${CMAKE_SOURCE_DIR}/lvgl/${LVGL_PROJECT}")
 
-set(MAIN_SRCS "app_${LVGL_PROJECT}.c")
+# Each app's entry point lives in its own folder: main/app_<project>/app_<project>.c
+set(MAIN_SRCS "app_${LVGL_PROJECT}/app_${LVGL_PROJECT}.c")
 set(MAIN_INCLUDE_DIRS "." "${CMAKE_SOURCE_DIR}/boards/${BOARD}" "${LVGL_DIR}/inc")
 
 if(LVGL_PROJECT STREQUAL "slide_player")
     list(APPEND MAIN_SRCS
         ${LVGL_DIR}/src/slide_player.c)
+
+elseif(LVGL_PROJECT STREQUAL "salary_cat")
+    list(APPEND MAIN_SRCS
+        ${LVGL_DIR}/src/salary_cat.c
+        audio_player.c
+        pmu_power.cpp)
 
 elseif(LVGL_PROJECT STREQUAL "acc_data")
     list(APPEND MAIN_SRCS

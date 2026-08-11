@@ -11,9 +11,10 @@ BOARD_DESC=(
     "Waveshare ESP32-S3 Touch AMOLED 1.75\""
     "Waveshare ESP32-S3 Touch AMOLED 2.06\""
 )
-PROJECTS=(slide_player acc_data battery_monitor)
+PROJECTS=(slide_player salary_cat acc_data battery_monitor)
 PROJ_DESC=(
     "PNG slideshow (touch gestures)"
+    "Salary cat (GIF + MP3 from SD)"
     "Accelerometer logger (IMU + PMU)"
     "Battery / PMU monitor (AXP2101)"
 )
@@ -68,8 +69,13 @@ done
 printf '%s\n' "$board" >.board
 printf '%s\n' "$project" >.lvgl_project
 
+# Each app's entry point lives in main/app_<project>/app_<project>.c
+app_entry="main/app_${project}/app_${project}.c"
+[ -f "$app_entry" ] || echo "  warning: entry point not found: $app_entry"
+
 echo
 echo "Selected: board=$board  project=$project"
+echo "App entry: $app_entry"
 echo "(.board / .lvgl_project updated - they are the single source of truth)"
 echo
 echo "Build:           idf.py build"

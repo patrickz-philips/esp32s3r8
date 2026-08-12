@@ -1,5 +1,6 @@
 #include "bsp/esp-bsp.h"
 #include "bsp/display.h"
+#include "board_config.h"
 #ifdef LVGL_IN_USED
 #include <stdbool.h>
 
@@ -18,27 +19,41 @@
 #ifdef LVGL_IN_USED
 static const char * TAG = "app_task";
 
+#if defined(ACC_DATA_BOARD_AMOLED_206)
+static const BaseType_t LVGL_TASK_CORE = 0;
+#endif
 static const uint32_t PRESS_SCAN_PERIOD_MS = 10U;
 static const uint32_t BUTTON_DEBOUNCE_MS = 30U;
 static const uint32_t BUTTON_LONG_PRESS_MS = 1500U;
 static const uint32_t PWRON_SHUTDOWN_PRESS_MS = 3000U;
+#if BOARD_HAS_HAPTIC
 static const uint32_t HAPTIC_PULSE_MS = 40U;
+#endif
 static const uint32_t IMU_POLL_PERIOD_MS = 20U;
 static const uint32_t SD_DROP_LOG_PERIOD_MS = 1000U;
 
 static const UBaseType_t TASK_PMU_PRIORITY = 1U;
 static const UBaseType_t TASK_IMU_PRIORITY = 2U;
 static const UBaseType_t TASK_PRESS_PRIORITY = 2U;
+#if BOARD_HAS_HAPTIC
 static const UBaseType_t TASK_HAPTIC_PRIORITY = 3U;
+#endif
 static const UBaseType_t TASK_LVGL_PRIORITY = 4U;
 
 static const uint32_t TASK_PMU_STACK_SIZE = 4096U;
 static const uint32_t TASK_IMU_STACK_SIZE = 4096U;
 static const uint32_t TASK_PRESS_STACK_SIZE = 4096U;
+#if BOARD_HAS_HAPTIC
 static const uint32_t TASK_HAPTIC_STACK_SIZE = 2048U;
+#endif
 
 static const gpio_num_t BOOT_BUTTON_GPIO = GPIO_NUM_0;
-static const gpio_num_t HAPTIC_GPIO = GPIO_NUM_18;
+#if BOARD_HAS_HAPTIC
+#ifndef BOARD_HAPTIC_GPIO
+#error "BOARD_HAS_HAPTIC requires a verified BOARD_HAPTIC_GPIO"
+#endif
+static const gpio_num_t HAPTIC_GPIO = (gpio_num_t)BOARD_HAPTIC_GPIO;
+#endif
 
 typedef struct {
     bool stable_pressed;
@@ -50,13 +65,17 @@ typedef struct {
 static TaskHandle_t s_task_pmu_handle;
 static TaskHandle_t s_task_imu_handle;
 static TaskHandle_t s_task_press_handle;
+#if BOARD_HAS_HAPTIC
 static TaskHandle_t s_task_haptic_handle;
+#endif
 
 static void notify_haptic_task(void)
 {
+#if BOARD_HAS_HAPTIC
     if (s_task_haptic_handle != NULL) {
         xTaskNotifyGive(s_task_haptic_handle);
     }
+#endif
 }
 
 static esp_err_t button_gpio_init(void)
@@ -70,6 +89,7 @@ static esp_err_t button_gpio_init(void)
     return gpio_config(&config);
 }
 
+#if BOARD_HAS_HAPTIC
 static esp_err_t haptic_gpio_init(void)
 {
     gpio_config_t config = {0};
@@ -82,6 +102,7 @@ static esp_err_t haptic_gpio_init(void)
     ESP_RETURN_ON_ERROR(gpio_config(&config), TAG, "Failed to configure haptic GPIO");
     return gpio_set_level(HAPTIC_GPIO, 0);
 }
+#endif
 
 static void process_boot_button(debounced_button_t * state)
 {
@@ -222,6 +243,7 @@ static void task_press(void * arg)
     }
 }
 
+#if BOARD_HAS_HAPTIC
 static void task_haptic(void * arg)
 {
     (void)arg;
@@ -233,24 +255,31 @@ static void task_haptic(void * arg)
         gpio_set_level(HAPTIC_GPIO, 0);
     }
 }
+#endif
 
 static esp_err_t acc_data_tasks_start(void)
 {
     BaseType_t ret;
 
     if (s_task_pmu_handle != NULL && s_task_imu_handle != NULL &&
-        s_task_press_handle != NULL && s_task_haptic_handle != NULL) {
+        s_task_press_handle != NULL
+#if BOARD_HAS_HAPTIC
+        && s_task_haptic_handle != NULL
+#endif
+       ) {
         return ESP_OK;
     }
 
     ESP_RETURN_ON_ERROR(pmu_power_init(), TAG, "Failed to initialize PMU");
     ESP_RETURN_ON_ERROR(imu_init(), TAG, "Failed to initialize IMU");
     ESP_RETURN_ON_ERROR(button_gpio_init(), TAG, "Failed to configure GPIO0 button");
+#if BOARD_HAS_HAPTIC
     ESP_RETURN_ON_ERROR(haptic_gpio_init(), TAG, "Failed to configure haptic GPIO");
 
     ret = xTaskCreate(task_haptic, "taskHaptic", TASK_HAPTIC_STACK_SIZE, NULL,
                       TASK_HAPTIC_PRIORITY, &s_task_haptic_handle);
     ESP_RETURN_ON_FALSE(ret == pdPASS, ESP_ERR_NO_MEM, TAG, "Failed to create taskHaptic");
+#endif
 
     ret = xTaskCreate(task_press, "taskPress", TASK_PRESS_STACK_SIZE, NULL,
                       TASK_PRESS_PRIORITY, &s_task_press_handle);
@@ -264,26 +293,64 @@ static esp_err_t acc_data_tasks_start(void)
                       TASK_IMU_PRIORITY, &s_task_imu_handle);
     ESP_RETURN_ON_FALSE(ret == pdPASS, ESP_ERR_NO_MEM, TAG, "Failed to create taskIMU");
 
-    ESP_LOGI(TAG,
-             "Task priorities: taskLVGL=%u, taskHaptic=%u, taskPress=%u, taskIMU=%u, taskPMU=%u",
+#if BOARD_HAS_HAPTIC
+    ESP_LOGI(TAG, "Task priorities: taskLVGL=%u, taskHaptic=%u, taskPress=%u, taskIMU=%u, taskPMU=%u",
              (unsigned int)TASK_LVGL_PRIORITY,
              (unsigned int)TASK_HAPTIC_PRIORITY,
              (unsigned int)TASK_PRESS_PRIORITY,
              (unsigned int)TASK_IMU_PRIORITY,
              (unsigned int)TASK_PMU_PRIORITY);
+#else
+    ESP_LOGI(TAG, "Task priorities: taskLVGL=%u, taskPress=%u, taskIMU=%u, taskPMU=%u",
+             (unsigned int)TASK_LVGL_PRIORITY,
+             (unsigned int)TASK_PRESS_PRIORITY,
+             (unsigned int)TASK_IMU_PRIORITY,
+             (unsigned int)TASK_PMU_PRIORITY);
+#endif
 
     return ESP_OK;
 }
 #endif /* LVGL_IN_USED */
 
+static lv_display_t * display_start(void)
+{
+#if defined(ACC_DATA_BOARD_AMOLED_206)
+    bsp_display_cfg_t display_config = {
+        .lvgl_port_cfg = ESP_LVGL_PORT_INIT_CONFIG(),
+        .buffer_size = BSP_LCD_DRAW_BUFF_SIZE,
+        .double_buffer = BSP_LCD_DRAW_BUFF_DOUBLE,
+        .flags = {
+            .buff_dma = false,
+            .buff_spiram = true,
+        },
+    };
+    display_config.lvgl_port_cfg.task_affinity = LVGL_TASK_CORE;
+    return bsp_display_start_with_config(&display_config);
+#else
+    return bsp_display_start();
+#endif
+}
+
+static bool display_lock_forever(void)
+{
+#if defined(ACC_DATA_BOARD_AMOLED_175)
+    return bsp_display_lock(UINT32_MAX) == ESP_OK;
+#else
+    return bsp_display_lock(UINT32_MAX);
+#endif
+}
+
 void app_main(void)
 {
-    if (bsp_display_start() == NULL) {
+    if (display_start() == NULL) {
         ESP_LOGE(TAG, "Display initialization failed");
         return;
     }
 
-    bsp_display_lock(-1);
+    if (!display_lock_forever()) {
+        ESP_LOGE(TAG, "Failed to lock display for UI initialization");
+        return;
+    }
 
 #ifdef LVGL_IN_USED
     acc_data_ui_init();

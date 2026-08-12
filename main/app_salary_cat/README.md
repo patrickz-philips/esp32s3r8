@@ -51,7 +51,9 @@ codec-enable bit.
 The app enables `CONFIG_LV_USE_GIF` through `sdkconfig.app`. The 1.75 profile
 uses the BSP's 50-row PSRAM double buffer, while the 2.06 profile uses a 60-row
 buffer. Neither app integration path changes the board BSP display communication
-frequency.
+frequency. The GIF widget keeps the source's native 240 x 240 dimensions and is
+centered on the active screen. This intentional exception to full-display
+layout avoids software scaling every animated frame.
 
 ## Task Model
 

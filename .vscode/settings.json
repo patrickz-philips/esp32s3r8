@@ -14,7 +14,7 @@
     "no_proxy": "localhost,127.0.0.1,::1"
   },
   "idf.flashType": "UART",
-  "idf.buildPath": "${workspaceFolder}/build/amoled_175_acc_data",
+  "idf.buildPath": "${workspaceFolder}/build/amoled_206_acc_data",
   "cmake.generator": "Ninja",
   "cmake.configureOnOpen": false,
   "cmake.useCMakePresets": "never",

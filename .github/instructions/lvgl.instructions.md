@@ -8,6 +8,11 @@ applyTo: "lvgl/**"
 - Keep UI implementation changes under `lvgl/<project>/`: screens, widgets,
   styles, assets, UI events, and UI-facing model APIs.
 - Use LVGL 9 APIs compatible with the version declared by the project.
+- By default, size screens and top-level layouts from the current active LVGL
+  display's horizontal and vertical pixel resolution. Use LVGL display APIs
+  such as `lv_display_get_horizontal_resolution()` and
+  `lv_display_get_vertical_resolution()` instead of hardcoding one board's
+  panel dimensions or including BSP headers in the UI layer.
 - Expose a small public header under `inc/`; keep internal widget details under
   `src/`.
 - Keep business state exchange behind the project's model API. FreeRTOS tasks

@@ -13,26 +13,31 @@ Follow [project guidelines](../copilot-instructions.md),
 Implement the requested LVGL work end to end.
 
 1. Inspect `lvgl/<project>/inc`, `src`, assets, the matching
-   `main/app_<project>` bridge, and the current UI/model contract.
+   `main/app_<project>` bridge, the current UI/model contract, and the active
+   display resolution supplied by the selected board's BSP.
 2. Keep screens, widgets, styles, events, assets, and UI model implementation
    inside `lvgl/<project>/`. Preserve a small public API in `inc/`.
-3. Keep hardware initialization, filesystem mounting, FreeRTOS orchestration,
+3. Default screen and top-level layout dimensions to the current active LVGL
+   display's horizontal and vertical pixel resolution. Query them through LVGL
+   display APIs; do not hardcode a board resolution or include BSP headers in
+   the LVGL layer.
+4. Keep hardware initialization, filesystem mounting, FreeRTOS orchestration,
    and board policy out of the LVGL layer. Request those operations through a
    model/app contract.
-4. If this is a new LVGL project, update the root supported-project list, build
+5. If this is a new LVGL project, update the root supported-project list, build
    wiring, and both selector scripts, and ensure a matching app component owns
    startup logic.
-5. Put app-only dependency declarations in
+6. Put app-only dependency declarations in
    `main/app_<project>/idf_component.yml`. Add reusable support under
    `components/` or through Component Manager. Never directly create or patch a
    generated managed component.
-6. Outside `lvgl/`, edit only required build wiring, selector metadata,
+7. Outside `lvgl/`, edit only required build wiring, selector metadata,
    manifests, app interface declarations, or reusable support components.
-7. Reassess board compatibility if the UI adds hardware, memory, storage, or
+8. Reassess board compatibility if the UI adds hardware, memory, storage, or
    decoder requirements.
-8. Build the affected board/app pair. Check LVGL API version, locking, asset
-   paths, compile warnings, and memory impact. State which rendering or input
-   behavior still needs hardware validation.
+9. Build the affected board/app pair. Check LVGL API version, locking, active
+   display resolution usage, asset paths, compile warnings, and memory impact.
+   State which rendering or input behavior still needs hardware validation.
 
 In the final response, identify the UI/model contract, non-LVGL wiring changes,
 dependency changes, compatibility impact, and validation results.

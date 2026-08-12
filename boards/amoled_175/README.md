@@ -125,7 +125,7 @@ The source of truth is [supported_apps.txt](supported_apps.txt).
 |:----|:-------|:-------|
 | `slide_player` | Supported | Uses the BSP display, touch, and SD APIs without a board-specific display config |
 | `salary_cat` | Supported | Uses BSP display, touch, SD, ES8311 audio, TCA9554 initialization, and AXP2101 PMU APIs |
-| `acc_data` | Incompatible | Current app uses the 2.06 display config structure and treats GPIO18 as haptic output; GPIO18 is expansion/GNSS on this board |
+| `acc_data` | Supported | Uses the common BSP display API and active LVGL resolution; haptic output is disabled, so GPIO18 remains available to expansion/GNSS |
 | `battery_monitor` | Incompatible | Current app uses the 2.06-specific display config structure |
 
 These are project integration limits, not claims that the physical board lacks

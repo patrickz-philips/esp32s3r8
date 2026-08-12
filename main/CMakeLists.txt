@@ -15,12 +15,7 @@ elseif(LVGL_PROJECT STREQUAL "salary_cat")
     # The selected app component owns its entry point, UI bridge, and audio.
 
 elseif(LVGL_PROJECT STREQUAL "acc_data")
-    list(APPEND MAIN_SRCS
-        app_acc_data/app_acc_data.c
-        ${LVGL_DIR}/src/acc_data.c
-        ${LVGL_DIR}/src/model.c
-        imu.c
-        sd_acc_writer.c)
+    # The selected app component owns its entry point, UI bridge, IMU, and SD writer.
 
 elseif(LVGL_PROJECT STREQUAL "battery_monitor")
     list(APPEND MAIN_SRCS

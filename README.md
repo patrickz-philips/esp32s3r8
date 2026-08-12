@@ -37,18 +37,20 @@ The project is organized as a small layered application:
 |   |-- amoled_175/               # AMOLED 1.75" board profile
 |   `-- amoled_206/               # AMOLED 2.06" board profile
 |-- components/
-|   `-- XPowersLib/               # PMU driver (used by acc_data/battery_monitor)
+|   |-- XPowersLib/               # AXP2101 driver
+|   `-- pmu_power/                # Reusable PMU service
 |-- lvgl/                         # LVGL applications (git submodules)
 |   |-- slide_player/             # PNG slideshow
 |   |-- acc_data/                 # accelerometer logger
+|   |-- salary_cat/               # GIF + MP3 player
 |   `-- battery_monitor/          # battery / PMU monitor
 |-- main/
-|   |-- CMakeLists.txt            # Selects app sources by LVGL_PROJECT
+|   |-- CMakeLists.txt            # Generic main component during migration
 |   |-- idf_component.yml         # Common component dependencies
-|   |-- app_slide_player.c        # Entry for slide_player
-|   |-- app_acc_data.c            # Entry for acc_data
-|   |-- app_battery_monitor.c     # Entry for battery_monitor
-|   `-- imu.c / pmu_power.cpp / sd_acc_writer.c  # app glue drivers
+|   |-- app_acc_data/             # acc_data entry, IMU, and SD writer
+|   |-- app_salary_cat/           # salary_cat entry and audio adapter
+|   |-- app_slide_player/         # slide_player component migration
+|   `-- app_battery_monitor/      # battery_monitor component migration
 |-- sdkconfig.defaults            # Common configuration
 `-- sdkconfig.<board>             # Generated per-board config (gitignored)
 ```

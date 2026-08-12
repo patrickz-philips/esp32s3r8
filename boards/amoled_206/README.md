@@ -28,7 +28,8 @@ assignments not present in that header are not inferred from another board or a
 newer hardware revision.
 
 **Direction:** `In` = input, `Out` = output, `I/O` = bidirectional.  
-**Source:** `[BSP]` = [resolved BSP pin header][bsp].
+**Source:** `[BSP]` = [resolved BSP pin header][bsp]; `[DEV]` = verified
+behavior on the project's 2.06-inch device and its pre-existing app profile.
 
 ### Storage and Shared I2C
 
@@ -65,6 +66,12 @@ newer hardware revision.
 | 45 | `I2S_LCLK` | ES8311 + ES7210 | I2S | Out | Shared frame clock | [BSP] |
 | 46 | `POWER_AMP_IO` | Audio amplifier | GPIO | Out | BSP owns active level | [BSP] |
 
+### App-Controlled Output
+
+| GPIO | Signal/Function | Peripheral/Sensor | Bus | Direction | Shared/Conflict | Source |
+|:-----|:----------------|:------------------|:----|:----------|:----------------|:-------|
+| 18 | `HAPTIC` | Haptic actuator | GPIO | Out | Used only when the selected app requests feedback | [DEV] |
+
 ## Sensors and Peripherals
 
 ### Display and Touch
@@ -99,7 +106,7 @@ are selected as compatible with this project profile:
 
 - `slide_player`: display, touch, SD, and PNG/JPEG decoding.
 - `salary_cat`: display, SD, ES8311 audio, and AXP2101 power control.
-- `acc_data`: display, SD, QMI8658, AXP2101, and current GPIO controls.
+- `acc_data`: display, SD, QMI8658, AXP2101, GPIO0 BOOT input, and GPIO18 haptic feedback.
 - `battery_monitor`: display and AXP2101 telemetry.
 
 ## Build Configuration and Limits
@@ -114,9 +121,11 @@ are selected as compatible with this project profile:
   Project-specific buffer fixes currently present under `managed_components/`
   are generated-state changes and must be converted to a version-controlled
   override before relying on a clean checkout.
-- `acc_data` currently drives GPIO18 as a haptic output, but GPIO18 is not
-  declared by the resolved BSP header. Verify this connection against the exact
-  board schematic before treating haptic behavior as validated.
+- The acc-data app pins the BSP-managed LVGL task to core 0 on this profile,
+  preserving the display scheduling used by the original 2.06 integration.
+- GPIO18 haptic feedback is enabled from device-verified project behavior. It is
+  not declared by the resolved BSP header and must be revalidated on a different
+  board revision before reuse.
 
 ## References
 

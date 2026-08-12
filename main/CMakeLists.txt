@@ -7,9 +7,7 @@ set(MAIN_SRCS "")
 set(MAIN_INCLUDE_DIRS "." "${CMAKE_SOURCE_DIR}/boards/${BOARD}" "${LVGL_DIR}/inc")
 
 if(LVGL_PROJECT STREQUAL "slide_player")
-    list(APPEND MAIN_SRCS
-        app_slide_player/app_slide_player.c
-        ${LVGL_DIR}/src/slide_player.c)
+    # The selected app component owns its entry point, UI bridge, and storage pipeline.
 
 elseif(LVGL_PROJECT STREQUAL "salary_cat")
     # The selected app component owns its entry point, UI bridge, and audio.

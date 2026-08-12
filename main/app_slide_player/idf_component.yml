@@ -1,3 +1,3 @@
 dependencies:
   espressif/esp_lv_decoder:
-    version: "*"
+    version: "^0.4.3"

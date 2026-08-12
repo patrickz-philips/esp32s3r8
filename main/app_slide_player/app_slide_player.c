@@ -1,23 +1,226 @@
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include <stdio.h>
-#include "esp_log.h"
-#include "esp_err.h"
-#include "lvgl.h"
 #include "bsp/esp-bsp.h"
 #include "bsp/display.h"
+
+#include <errno.h>
+#include <stdbool.h>
+#include <stdio.h>
+#include <string.h>
+
+#include "board_config.h"
+#include "esp_err.h"
+#include "esp_log.h"
 #include "esp_lv_decoder.h"
+#include "esp_timer.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/queue.h"
+#include "freertos/task.h"
 #include "slide_player.h"
 
-static const char *TAG = "main";
-static esp_lv_decoder_handle_t s_decoder_handle;
+#if !BOARD_HAS_SD || !BOARD_HAS_TOUCH || !BOARD_FEATURE_SLIDE_PLAYER
+#error "slide_player requires a compatible board with touch and SD storage"
+#endif
 
-// SD wiring differs per board (206: SDMMC, 175: SPI); the board BSP owns it.
-static void slide_player_unmount_sdcard(void)
+static const char * TAG = "app_slide_player";
+static const char * SLIDE_ASSET_DIR = "A:/sdcard";
+static const uint32_t SLIDE_COUNT = 32U;
+static const uint32_t FIRST_SLIDE_NUMBER = 1U;
+static const uint32_t SD_TASK_STACK_SIZE = 4096U;
+static const UBaseType_t SD_TASK_PRIORITY = 4U;
+
+typedef struct {
+    uint32_t request_id;
+    uint32_t slide_index;
+    char image_path[SLIDE_PLAYER_IMAGE_PATH_MAX_LEN];
+} slide_load_request_t;
+
+static esp_lv_decoder_handle_t s_decoder_handle;
+static QueueHandle_t s_request_queue;
+static TaskHandle_t s_reader_task_handle;
+
+static bool display_lock_forever(void)
 {
-    esp_err_t unmount_ret = bsp_sdcard_unmount();
-    if (unmount_ret != ESP_OK) {
-        ESP_LOGW(TAG, "Failed to unmount SD card: %s", esp_err_to_name(unmount_ret));
+#if defined(SLIDE_PLAYER_BOARD_AMOLED_175)
+    return bsp_display_lock(UINT32_MAX) == ESP_OK;
+#else
+    return bsp_display_lock(UINT32_MAX);
+#endif
+}
+
+static bool build_slide_path(uint32_t slide_index, char * output, size_t output_size)
+{
+    if (output == NULL || output_size == 0U || slide_index >= SLIDE_COUNT) {
+        return false;
+    }
+
+    const int written = snprintf(output, output_size, "%s/%u.png", SLIDE_ASSET_DIR,
+                                 (unsigned int)(slide_index + FIRST_SLIDE_NUMBER));
+    return written > 0 && (size_t)written < output_size;
+}
+
+static bool lvgl_path_to_posix_path(const char * lvgl_path, char * posix_path, size_t posix_path_size)
+{
+    if (lvgl_path == NULL || posix_path == NULL || posix_path_size == 0U) {
+        return false;
+    }
+
+    const char * source = lvgl_path;
+    if (lvgl_path[0] != '\0' && lvgl_path[1] == ':') {
+        source = &lvgl_path[2];
+    }
+
+    const size_t source_len = strlen(source);
+    if (source_len + 1U > posix_path_size) {
+        return false;
+    }
+
+    memcpy(posix_path, source, source_len + 1U);
+    return true;
+}
+
+static bool probe_slide_file(slide_player_load_result_t * result)
+{
+    char posix_path[SLIDE_PLAYER_IMAGE_PATH_MAX_LEN];
+    if (!lvgl_path_to_posix_path(result->image_path, posix_path, sizeof(posix_path))) {
+        result->error_no = ENAMETOOLONG;
+        return false;
+    }
+
+    FILE * file = fopen(posix_path, "rb");
+    if (file == NULL) {
+        result->error_no = errno;
+        return false;
+    }
+
+    const int64_t start_us = esp_timer_get_time();
+    uint8_t header[16];
+    const size_t header_size = fread(header, 1U, sizeof(header), file);
+    if (header_size == 0U && ferror(file) != 0) {
+        result->error_no = errno;
+        fclose(file);
+        return false;
+    }
+
+    if (fseek(file, 0, SEEK_END) != 0) {
+        result->error_no = errno;
+        fclose(file);
+        return false;
+    }
+
+    const long file_size = ftell(file);
+    if (file_size < 0) {
+        result->error_no = errno;
+        fclose(file);
+        return false;
+    }
+
+    result->bytes_read = (uint32_t)file_size;
+    result->elapsed_us = (uint64_t)(esp_timer_get_time() - start_us);
+    fclose(file);
+    return true;
+}
+
+static void slide_reader_task(void * arg)
+{
+    (void)arg;
+
+    slide_load_request_t request;
+    while (true) {
+        if (xQueueReceive(s_request_queue, &request, portMAX_DELAY) != pdTRUE) {
+            continue;
+        }
+
+        slide_player_load_result_t result = {
+            .request_id = request.request_id,
+            .slide_index = request.slide_index,
+        };
+        memcpy(result.image_path, request.image_path, sizeof(result.image_path));
+        result.success = probe_slide_file(&result);
+
+        if (!result.success) {
+            ESP_LOGW(TAG, "[%u] SD read failed path=%s errno=%d (%s)",
+                     (unsigned int)result.request_id, result.image_path,
+                     result.error_no, strerror(result.error_no));
+        }
+        if (!slide_player_post_load_result(&result)) {
+            ESP_LOGW(TAG, "[%u] Failed to post SD result", (unsigned int)result.request_id);
+        }
+    }
+}
+
+static bool request_slide_load(uint32_t slide_index, uint32_t request_id, void * user_ctx)
+{
+    (void)user_ctx;
+
+    if (s_request_queue == NULL) {
+        return false;
+    }
+
+    slide_load_request_t request = {
+        .request_id = request_id,
+        .slide_index = slide_index,
+    };
+    if (!build_slide_path(slide_index, request.image_path, sizeof(request.image_path))) {
+        ESP_LOGE(TAG, "[%u] Failed to build path for slide %u", (unsigned int)request_id,
+                 (unsigned int)(slide_index + 1U));
+        return false;
+    }
+
+    if (xQueueOverwrite(s_request_queue, &request) != pdTRUE) {
+        ESP_LOGW(TAG, "[%u] Failed to queue slide %u", (unsigned int)request_id,
+                 (unsigned int)(slide_index + 1U));
+        return false;
+    }
+
+    ESP_LOGI(TAG, "[%u] Queued slide=%u path=%s", (unsigned int)request_id,
+             (unsigned int)(slide_index + 1U), request.image_path);
+    return true;
+}
+
+static void slide_pipeline_stop(void)
+{
+    if (s_reader_task_handle != NULL) {
+        vTaskDelete(s_reader_task_handle);
+        s_reader_task_handle = NULL;
+    }
+    if (s_request_queue != NULL) {
+        vQueueDelete(s_request_queue);
+        s_request_queue = NULL;
+    }
+}
+
+static esp_err_t slide_pipeline_start(void)
+{
+    s_request_queue = xQueueCreate(1U, sizeof(slide_load_request_t));
+    if (s_request_queue == NULL) {
+        ESP_LOGE(TAG, "Failed to create SD request queue");
+        return ESP_ERR_NO_MEM;
+    }
+
+    if (xTaskCreate(slide_reader_task, "slide_sd_reader", SD_TASK_STACK_SIZE, NULL,
+                    SD_TASK_PRIORITY, &s_reader_task_handle) != pdPASS) {
+        ESP_LOGE(TAG, "Failed to create SD reader task");
+        slide_pipeline_stop();
+        return ESP_ERR_NO_MEM;
+    }
+
+    return ESP_OK;
+}
+
+static void slide_player_runtime_deinit(void)
+{
+    slide_pipeline_stop();
+
+    if (s_decoder_handle != NULL) {
+        const esp_err_t ret = esp_lv_decoder_deinit(s_decoder_handle);
+        if (ret != ESP_OK) {
+            ESP_LOGE(TAG, "LVGL decoder rollback failed: %s", esp_err_to_name(ret));
+        }
+        s_decoder_handle = NULL;
+    }
+
+    const esp_err_t ret = bsp_sdcard_unmount();
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "SD rollback failed: %s", esp_err_to_name(ret));
     }
 }
 
@@ -33,27 +236,49 @@ static esp_err_t slide_player_runtime_init(void)
     ret = esp_lv_decoder_init(&s_decoder_handle);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "LVGL decoder init failed: %s", esp_err_to_name(ret));
-        slide_player_unmount_sdcard();
+        const esp_err_t unmount_ret = bsp_sdcard_unmount();
+        if (unmount_ret != ESP_OK) {
+            ESP_LOGE(TAG, "SD rollback failed: %s", esp_err_to_name(unmount_ret));
+        }
         return ret;
     }
 
-    return ESP_OK;
+    ret = slide_pipeline_start();
+    if (ret != ESP_OK) {
+        slide_player_runtime_deinit();
+    }
+    return ret;
 }
 
 void app_main(void)
 {
+    const slide_player_model_t model = {
+        .slide_count = SLIDE_COUNT,
+        .request_slide = request_slide_load,
+        .user_ctx = NULL,
+    };
 
-    bsp_display_start();
+    if (bsp_display_start() == NULL) {
+        ESP_LOGE(TAG, "Display initialization failed");
+        return;
+    }
 
-    bsp_display_lock(-1);
+    if (!display_lock_forever()) {
+        ESP_LOGE(TAG, "Failed to lock display for runtime initialization");
+        return;
+    }
 
-    esp_err_t ret = slide_player_runtime_init();
+    const esp_err_t ret = slide_player_runtime_init();
     if (ret != ESP_OK) {
         bsp_display_unlock();
         return;
     }
 
-    slide_player_ui_init();
+    const esp_err_t ui_ret = slide_player_ui_init(&model);
+    if (ui_ret != ESP_OK) {
+        ESP_LOGE(TAG, "UI initialization failed: %s", esp_err_to_name(ui_ret));
+        slide_player_runtime_deinit();
+    }
 
     bsp_display_unlock();
 }

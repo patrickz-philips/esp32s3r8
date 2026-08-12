@@ -1,10 +1,49 @@
 # Slide Player App
 
-Displays PNG slides from the SD card and changes slides through touch gestures.
+Displays 32 numbered PNG slides from the SD card and changes slides with
+horizontal touch gestures. Slides must be available as `/sdcard/1.png` through
+`/sdcard/32.png`.
 
-Required board capabilities: display, touch, and SD storage.
+## Required Capabilities
 
-App-only dependency: `espressif/esp_lv_decoder`.
+The app requires a display, touch input, and SD storage. Compatibility is
+declared by each board's `supported_apps.txt`; `board_config.h` provides a
+second compile-time capability check. SD wiring and mounting are owned by the
+selected board BSP.
 
-The app source is still compiled by `main/CMakeLists.txt` during the independent
-component migration tracked in the root `plan.md`.
+`app_slide_player` is an independent selected component. Its app-only image
+dependency is `espressif/esp_lv_decoder` 0.4.x.
+
+## Initialization
+
+Initialization starts the BSP display, mounts the SD card, initializes the LVGL
+PNG decoder, creates the one-entry request queue and SD reader task, then creates
+the UI while holding the BSP display lock. A required failure stops later stages
+and rolls back the task, queue, decoder, and SD mount as applicable.
+
+## Task Model
+
+| Task | Stack | Priority | Responsibility |
+|:-----|:------|:---------|:---------------|
+| `slide_sd_reader` | 4096 bytes | 4 | Validate the latest requested slide file and post a typed result to the LVGL model |
+
+The BSP owns the LVGL task. A one-entry overwrite queue coalesces rapid gestures
+so stale slide requests do not accumulate. The UI also drops stale results by
+request ID.
+
+## LVGL Model Contract
+
+`slide_player.h` defines the typed bridge. The UI calls the app-provided
+`request_slide` callback with a slide index and request ID. The reader task posts
+`slide_player_load_result_t` through `slide_player_post_load_result()`; an LVGL
+timer consumes that queue and is the only asynchronous path that mutates image
+or label widgets.
+
+The top-level frame reads the active display resolution and has no BSP header or
+board-specific panel dimensions.
+
+## Device Checks
+
+Builds validate component wiring only. On each board, verify SD mount behavior,
+PNG decoding, left/right gestures, boundary handling, rapid gesture coalescing,
+missing-file recovery, and full-screen layout.

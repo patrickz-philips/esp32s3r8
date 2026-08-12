@@ -14,6 +14,6 @@
 // Current project integration status, not raw hardware capability.
 #define BOARD_FEATURE_SLIDE_PLAYER 1
 #define BOARD_FEATURE_SALARY_CAT   1
-#define BOARD_FEATURE_ACC_DATA     0
+#define BOARD_FEATURE_ACC_DATA     1
 
 // SD card is mounted via the board BSP (bsp_sdcard_mount); wiring lives there.

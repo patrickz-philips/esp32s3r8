@@ -15,8 +15,6 @@
 #include "sd_acc_writer.h"
 #endif
 
-static const BaseType_t LVGL_TASK_CORE = 0;
-
 #ifdef LVGL_IN_USED
 static const char * TAG = "app_task";
 
@@ -280,18 +278,10 @@ static esp_err_t acc_data_tasks_start(void)
 
 void app_main(void)
 {
-    bsp_display_cfg_t display_config = {
-        .lvgl_port_cfg = ESP_LVGL_PORT_INIT_CONFIG(),
-        .buffer_size = BSP_LCD_DRAW_BUFF_SIZE,
-        .double_buffer = BSP_LCD_DRAW_BUFF_DOUBLE,
-        .flags = {
-            .buff_dma = false,
-            .buff_spiram = true,
-        },
-    };
-    display_config.lvgl_port_cfg.task_affinity = LVGL_TASK_CORE;
-
-    bsp_display_start_with_config(&display_config);
+    if (bsp_display_start() == NULL) {
+        ESP_LOGE(TAG, "Display initialization failed");
+        return;
+    }
 
     bsp_display_lock(-1);
 

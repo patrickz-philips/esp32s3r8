@@ -38,19 +38,74 @@ if(NOT LVGL_PROJECT IN_LIST SUPPORTED_PROJECTS)
     message(FATAL_ERROR "Unknown LVGL_PROJECT='${LVGL_PROJECT}'. Supported: ${SUPPORTED_PROJECTS}")
 endif()
 
+set(BOARD_DIR "${CMAKE_CURRENT_LIST_DIR}/boards/${BOARD}")
+set(BOARD_SUPPORTED_APPS_FILE "${BOARD_DIR}/supported_apps.txt")
+if(NOT EXISTS "${BOARD_SUPPORTED_APPS_FILE}")
+    message(FATAL_ERROR "Missing board compatibility file: ${BOARD_SUPPORTED_APPS_FILE}")
+endif()
+
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+    "${BOARD_SUPPORTED_APPS_FILE}")
+file(STRINGS "${BOARD_SUPPORTED_APPS_FILE}" BOARD_SUPPORTED_APP_LINES)
+set(BOARD_SUPPORTED_APPS "")
+foreach(app IN LISTS BOARD_SUPPORTED_APP_LINES)
+    string(STRIP "${app}" app)
+    if(NOT app STREQUAL "" AND NOT app MATCHES "^#")
+        if(NOT app IN_LIST SUPPORTED_PROJECTS)
+            message(FATAL_ERROR
+                "Unknown app '${app}' in board compatibility file: ${BOARD_SUPPORTED_APPS_FILE}")
+        endif()
+        list(APPEND BOARD_SUPPORTED_APPS "${app}")
+    endif()
+endforeach()
+
+if(NOT BOARD_SUPPORTED_APPS)
+    message(FATAL_ERROR "Board '${BOARD}' has no supported apps in ${BOARD_SUPPORTED_APPS_FILE}")
+endif()
+if(NOT LVGL_PROJECT IN_LIST BOARD_SUPPORTED_APPS)
+    string(JOIN ", " BOARD_SUPPORTED_APPS_DISPLAY ${BOARD_SUPPORTED_APPS})
+    message(FATAL_ERROR
+        "Incompatible board/app pair: BOARD='${BOARD}', LVGL_PROJECT='${LVGL_PROJECT}'. "
+        "Supported apps for ${BOARD}: ${BOARD_SUPPORTED_APPS_DISPLAY}")
+endif()
+
 message(STATUS "Building for BOARD=${BOARD}")
 message(STATUS "Building LVGL_PROJECT=${LVGL_PROJECT}")
+
+if(BOARD STREQUAL "amoled_175")
+    set(SELECTED_BSP_COMPONENT "waveshare__esp32_s3_touch_amoled_1_75")
+elseif(BOARD STREQUAL "amoled_206")
+    set(SELECTED_BSP_COMPONENT "waveshare__esp32_s3_touch_amoled_2_06")
+endif()
+
+# Component requirement expansion runs in a child CMake process. Export the
+# resolved selection so normal components can declare the selected BSP without
+# depending on both board packages.
+set(ENV{SELECTED_BOARD} "${BOARD}")
+set(ENV{SELECTED_BSP_COMPONENT} "${SELECTED_BSP_COMPONENT}")
 # ----------------------------------------------------------------------------
 
-set(BOARD_DIR "${CMAKE_CURRENT_LIST_DIR}/boards/${BOARD}")
+set(APP_DIR "${CMAKE_CURRENT_LIST_DIR}/main/app_${LVGL_PROJECT}")
+if(NOT EXISTS "${APP_DIR}/CMakeLists.txt")
+    message(FATAL_ERROR "Missing selected app component: ${APP_DIR}/CMakeLists.txt")
+endif()
 
-# Only the selected board directory is registered, so the component manager
-# installs just this board's managed dependencies.
-set(EXTRA_COMPONENT_DIRS "${BOARD_DIR}")
+# Shared services with no selected consumer must not pull in board-specific
+# dependencies during ESP-IDF's component dependency expansion pass.
+if(LVGL_PROJECT STREQUAL "slide_player")
+    list(APPEND EXCLUDE_COMPONENTS pmu_power)
+endif()
+
+# Register only the selected board and app dependency components.
+set(EXTRA_COMPONENT_DIRS "${BOARD_DIR}" "${APP_DIR}")
 
 # Per-board generated config + layered defaults (board file overrides common).
 set(SDKCONFIG "${CMAKE_CURRENT_LIST_DIR}/sdkconfig.${BOARD}")
-set(SDKCONFIG_DEFAULTS "${CMAKE_CURRENT_LIST_DIR}/sdkconfig.defaults;${BOARD_DIR}/sdkconfig.board")
+set(SDKCONFIG_DEFAULTS
+    "${CMAKE_CURRENT_LIST_DIR}/sdkconfig.defaults;${BOARD_DIR}/sdkconfig.board")
+if(EXISTS "${APP_DIR}/sdkconfig.app")
+    list(APPEND SDKCONFIG_DEFAULTS "${APP_DIR}/sdkconfig.app")
+endif()
 # ----------------------------------------------------------------------------
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)

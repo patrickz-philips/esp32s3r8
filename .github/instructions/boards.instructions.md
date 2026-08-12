@@ -23,10 +23,25 @@ applyTo: "boards/**"
 - Document in English: board and SoC identity, flash/PSRAM, display and touch,
   GPIO table, buses, sensors, storage, audio, PMU, dependency versions,
   partition layout, supported apps, initialization notes, and known limits.
+- Format every Markdown table for scanning:
+  - Explicitly left-align every column with a leading colon in each separator
+    cell, for example `|:---|:---|`. Do not rely on renderer defaults.
+  - Keep cells concise and use consistent abbreviations defined immediately
+    above the table.
+  - Split wide or long tables into functional groups with descriptive headings;
+    for GPIOs, prefer groups such as system/storage, display/touch, shared buses,
+    audio, and expansion.
+  - Group sensor/peripheral summaries by function as well. Prefer the compact
+    columns `Device`, `Interface`, `Control`, `GPIO`, and `Role`; move sentences,
+    caveats, and implementation details into short prose below the related table.
+  - Repeat the full header in each group. Keep one physical GPIO per row and do
+    not merge pin ranges when pins have independent signals.
+  - Use a short source token such as `[HW]` or `[BSP]` in each row and define it
+    once above the grouped tables as a link to the authoritative source.
 - The board README must contain this GPIO allocation table:
 
   | GPIO | Signal/Function | Peripheral/Sensor | Bus | Direction | Shared/Conflict | Source |
-  |------|-----------------|-------------------|-----|-----------|-----------------|--------|
+  |:-----|:----------------|:------------------|:----|:----------|:----------------|:-------|
 
   Add one row for every occupied ESP GPIO. Associate the signal with its sensor
   or peripheral, including display, touch, SD, audio, PMU, buttons, interrupts,

@@ -64,16 +64,44 @@ set "board=!BOARD_%c%!"
 
 :board_done
 
+set "supported_file=boards\!board!\supported_apps.txt"
+if not exist "!supported_file!" (
+    echo Missing board compatibility file: !supported_file!
+    exit /b 1
+)
+
+set "supported_count=0"
+for /f "usebackq tokens=* delims=" %%a in ("!supported_file!") do (
+    set "supported_app=%%a"
+    if not "!supported_app!"=="" if not "!supported_app:~0,1!"=="#" (
+        set /a supported_count+=1
+        set "SUPPORTED_APP_!supported_count!=!supported_app!"
+    )
+)
+if !supported_count! EQU 0 (
+    echo No supported apps declared in !supported_file!
+    exit /b 1
+)
+
+set "project=!cur_proj!"
+call :is_app_compatible "!project!"
+if errorlevel 1 (
+    set "project=!SUPPORTED_APP_1!"
+    echo   '!cur_proj!' is incompatible with !board!; defaulting to '!project!'.
+)
+
 rem --- Step 2: lvgl project ------------------------------------------------
 echo.
 echo Step 2/2 - Select lvgl project (current: !cur_proj!)
 for /L %%i in (1,1,%PROJECT_COUNT%) do (
     set "mark=  "
-    if /I "!PROJECT_%%i!"=="!cur_proj!" set "mark==>"
-    echo   !mark! %%i^) !PROJECT_%%i! !PROJ_DESC_%%i!
+    if /I "!PROJECT_%%i!"=="!project!" set "mark==>"
+    set "app_label=!PROJECT_%%i!"
+    call :is_app_compatible "!PROJECT_%%i!"
+    if errorlevel 1 set "app_label=!app_label! (Incompatible)"
+    echo   !mark! %%i^) !app_label! !PROJ_DESC_%%i!
 )
 
-set "project=!cur_proj!"
 :project_prompt
 set "c="
 set /p "c=  number / Enter=keep / q=quit: "
@@ -95,7 +123,13 @@ if !c! GTR %PROJECT_COUNT% (
     echo   invalid: '!c!'
     goto project_prompt
 )
-set "project=!PROJECT_%c%!"
+set "candidate=!PROJECT_%c%!"
+call :is_app_compatible "!candidate!"
+if errorlevel 1 (
+    echo   incompatible: '!candidate!' is not supported on '!board!'
+    goto project_prompt
+)
+set "project=!candidate!"
 
 :project_done
 
@@ -121,3 +155,10 @@ set "n=%~1"
 echo(%n%| findstr /r "^[0-9][0-9]*$" >nul
 if errorlevel 1 exit /b 1
 exit /b 0
+
+:is_app_compatible
+set "wanted=%~1"
+for /L %%j in (1,1,!supported_count!) do (
+    if /I "!SUPPORTED_APP_%%j!"=="!wanted!" exit /b 0
+)
+exit /b 1

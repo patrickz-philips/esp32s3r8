@@ -17,6 +17,7 @@
 #include "salary_cat.h"
 
 static const char *TAG = "app_salary_cat";
+static const char *MP3_PATH = "/sdcard/music.mp3";
 
 static const uint32_t PWRON_SHUTDOWN_PRESS_MS = 3000U;
 static const uint32_t PRESS_SCAN_PERIOD_MS = 20U;
@@ -30,13 +31,57 @@ static const uint32_t AUDIO_REOPEN_DELAY_MS = 1000U;
 static TaskHandle_t s_task_press_handle;
 static TaskHandle_t s_task_audio_handle;
 
+static bool display_lock_forever(void)
+{
+#if defined(SALARY_CAT_BOARD_AMOLED_175)
+    return bsp_display_lock(UINT32_MAX) == ESP_OK;
+#else
+    return bsp_display_lock(UINT32_MAX);
+#endif
+}
+
+static int adjust_volume(int delta, void *user_ctx)
+{
+    (void)user_ctx;
+    audio_player_adjust_volume(delta);
+    return audio_player_get_volume();
+}
+
+static void stop_tasks(void)
+{
+    if (s_task_audio_handle != NULL) {
+        vTaskDelete(s_task_audio_handle);
+        s_task_audio_handle = NULL;
+    }
+    if (s_task_press_handle != NULL) {
+        vTaskDelete(s_task_press_handle);
+        s_task_press_handle = NULL;
+    }
+}
+
+static void rollback_hardware(void)
+{
+    esp_err_t ret = audio_player_deinit();
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Audio rollback failed: %s", esp_err_to_name(ret));
+    }
+    ret = pmu_power_deinit();
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "PMU rollback failed: %s", esp_err_to_name(ret));
+    }
+    ret = bsp_sdcard_unmount();
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "SD rollback failed: %s", esp_err_to_name(ret));
+    }
+}
+
 /* Loop the MP3 forever; retry after a short delay if the file cannot be opened. */
 static void task_audio(void *arg)
 {
     (void)arg;
 
     while (true) {
-        if (audio_player_play_file(AUDIO_PLAYER_MP3_PATH) != ESP_OK) {
+        if (audio_player_play_file(MP3_PATH) != ESP_OK) {
             vTaskDelay(pdMS_TO_TICKS(AUDIO_REOPEN_DELAY_MS));
         }
     }
@@ -82,11 +127,15 @@ static void task_power_button(void *arg)
 
 void app_main(void)
 {
-    bsp_display_start();
+    const salary_cat_model_t model = {
+        .adjust_volume = adjust_volume,
+        .user_ctx = NULL,
+    };
 
-    bsp_display_lock(-1);
-    salary_cat_ui_init();
-    bsp_display_unlock();
+    if (bsp_display_start() == NULL) {
+        ESP_LOGE(TAG, "Display initialization failed");
+        return;
+    }
 
     esp_err_t ret = bsp_sdcard_mount();
     if (ret != ESP_OK) {
@@ -95,33 +144,54 @@ void app_main(void)
     }
     ESP_LOGI(TAG, "SD card mounted at %s", BSP_SD_MOUNT_POINT);
 
-    /* Cache the GIF into RAM first (streaming from the SD card is too slow). */
-    ret = salary_cat_load_gif();
-    if (ret != ESP_OK) {
-        ESP_LOGW(TAG, "GIF caching failed (%s), will stream from SD", esp_err_to_name(ret));
-    }
-
-    /* Start the GIF (from the cache) and the MP3 together. */
-    bsp_display_lock(-1);
-    salary_cat_start_playback();
-    bsp_display_unlock();
-
     ret = audio_player_init();
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Failed to initialize audio player: %s", esp_err_to_name(ret));
-    } else if (xTaskCreate(task_audio, "audio_player", TASK_AUDIO_STACK_SIZE, NULL,
-                           TASK_AUDIO_PRIORITY, &s_task_audio_handle) != pdPASS) {
-        ESP_LOGE(TAG, "Failed to create audio task");
+        rollback_hardware();
+        return;
     }
 
     ret = pmu_power_init();
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Failed to initialize PMU: %s", esp_err_to_name(ret));
+        rollback_hardware();
         return;
     }
 
-    if (xTaskCreate(task_power_button, "taskPress", TASK_PRESS_STACK_SIZE, NULL,
+    if (!display_lock_forever()) {
+        ESP_LOGE(TAG, "Failed to lock display for UI initialization");
+        rollback_hardware();
+        return;
+    }
+    salary_cat_ui_init(&model);
+    bsp_display_unlock();
+
+    ret = salary_cat_load_gif();
+    if (ret != ESP_OK) {
+        ESP_LOGW(TAG, "GIF caching failed (%s), will stream from SD", esp_err_to_name(ret));
+    }
+
+    if (xTaskCreate(task_audio, "salary_audio", TASK_AUDIO_STACK_SIZE, NULL,
+                    TASK_AUDIO_PRIORITY, &s_task_audio_handle) != pdPASS) {
+        ESP_LOGE(TAG, "Failed to create audio task");
+        rollback_hardware();
+        return;
+    }
+
+    if (xTaskCreate(task_power_button, "salary_power", TASK_PRESS_STACK_SIZE, NULL,
                     TASK_PRESS_PRIORITY, &s_task_press_handle) != pdPASS) {
         ESP_LOGE(TAG, "Failed to create power-button task");
+        stop_tasks();
+        rollback_hardware();
+        return;
     }
+
+    if (!display_lock_forever()) {
+        ESP_LOGE(TAG, "Failed to lock display for playback");
+        stop_tasks();
+        rollback_hardware();
+        return;
+    }
+    salary_cat_start_playback();
+    bsp_display_unlock();
 }

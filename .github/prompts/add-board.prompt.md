@@ -27,7 +27,7 @@ Add the requested board end to end. Do not stop after proposing files.
    ESP GPIO:
 
    | GPIO | Signal/Function | Peripheral/Sensor | Bus | Direction | Shared/Conflict | Source |
-   |------|-----------------|-------------------|-----|-----------|-----------------|--------|
+   |:-----|:----------------|:------------------|:----|:----------|:----------------|:-------|
 
    Link each GPIO to its sensor or peripheral. Mark shared, multiplexed,
    boot-strapping, input-only, and otherwise constrained pins. Use `N/A` where a
@@ -35,6 +35,15 @@ Add the requested board end to end. Do not stop after proposing files.
    datasheet, or explicit user specification in every `Source` cell. Also add a
    sensor/peripheral summary for devices without a direct ESP GPIO, including
    bus, address or chip select, interrupt/reset signals, and related GPIO rows.
+   Explicitly left-align every column in every README table using `:---`
+   separators. Group the GPIO rows by function instead of emitting one large
+   table, repeat the full header in every group, keep cell text concise, and use
+   a defined source token such as `[HW]` or `[BSP]` in every GPIO row. Apply the
+   same concise, left-aligned formatting to profile, peripheral, compatibility,
+   partition, and other tables in the README. Split the sensor/peripheral summary
+   into functional groups and prefer compact `Device`, `Interface`, `Control`,
+   `GPIO`, and `Role` columns. Put sentence-length notes and caveats in short
+   prose below the relevant table instead of widening table cells.
 4. Keep only BSP and on-board hardware dependencies in the board manifest. Do
    not copy vendor driver code when a suitable maintained component exists.
 5. Audit every existing app's hardware and API requirements. Put only compatible

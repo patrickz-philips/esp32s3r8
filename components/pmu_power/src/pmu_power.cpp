@@ -23,23 +23,21 @@ XPowersPMU pmu;
 i2c_master_dev_handle_t pmu_dev_handle = nullptr;
 SemaphoreHandle_t pmu_mutex = nullptr;
 
-int pmu_register_read(uint8_t dev_addr, uint8_t reg_addr, uint8_t * data, uint8_t len)
+int pmu_register_read(uint8_t dev_addr, uint8_t reg_addr, uint8_t *data, uint8_t len)
 {
     (void)dev_addr;
-
-    esp_err_t ret = i2c_master_transmit_receive(pmu_dev_handle, &reg_addr, 1, data, len, PMU_I2C_TIMEOUT_MS);
+    esp_err_t ret = i2c_master_transmit_receive(
+        pmu_dev_handle, &reg_addr, 1, data, len, PMU_I2C_TIMEOUT_MS);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "PMU read reg 0x%02x failed: %s", reg_addr, esp_err_to_name(ret));
         return -1;
     }
-
     return 0;
 }
 
-int pmu_register_write_byte(uint8_t dev_addr, uint8_t reg_addr, uint8_t * data, uint8_t len)
+int pmu_register_write_byte(uint8_t dev_addr, uint8_t reg_addr, uint8_t *data, uint8_t len)
 {
     (void)dev_addr;
-
     uint8_t buffer[16];
     if (len + 1U > sizeof(buffer)) {
         ESP_LOGE(TAG, "PMU write too long: %u", (unsigned int)len);
@@ -51,32 +49,25 @@ int pmu_register_write_byte(uint8_t dev_addr, uint8_t reg_addr, uint8_t * data, 
         std::memcpy(&buffer[1], data, len);
     }
 
-    esp_err_t ret = i2c_master_transmit(pmu_dev_handle, buffer, len + 1U, PMU_I2C_TIMEOUT_MS);
+    esp_err_t ret = i2c_master_transmit(
+        pmu_dev_handle, buffer, len + 1U, PMU_I2C_TIMEOUT_MS);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "PMU write reg 0x%02x failed: %s", reg_addr, esp_err_to_name(ret));
         return -1;
     }
-
     return 0;
 }
 
-const char * charge_status_text(uint8_t status)
+const char *charge_status_text(uint8_t status)
 {
     switch (status) {
-        case XPOWERS_AXP2101_CHG_TRI_STATE:
-            return "tri_charge";
-        case XPOWERS_AXP2101_CHG_PRE_STATE:
-            return "pre_charge";
-        case XPOWERS_AXP2101_CHG_CC_STATE:
-            return "constant charge";
-        case XPOWERS_AXP2101_CHG_CV_STATE:
-            return "constant voltage";
-        case XPOWERS_AXP2101_CHG_DONE_STATE:
-            return "charge done";
-        case XPOWERS_AXP2101_CHG_STOP_STATE:
-            return "not charging";
-        default:
-            return "unknown";
+        case XPOWERS_AXP2101_CHG_TRI_STATE: return "tri_charge";
+        case XPOWERS_AXP2101_CHG_PRE_STATE: return "pre_charge";
+        case XPOWERS_AXP2101_CHG_CC_STATE: return "constant charge";
+        case XPOWERS_AXP2101_CHG_CV_STATE: return "constant voltage";
+        case XPOWERS_AXP2101_CHG_DONE_STATE: return "charge done";
+        case XPOWERS_AXP2101_CHG_STOP_STATE: return "not charging";
+        default: return "unknown";
     }
 }
 
@@ -109,15 +100,12 @@ esp_err_t pmu_i2c_device_init(void)
     }
 
     i2c_master_bus_handle_t bus_handle = bsp_i2c_get_handle();
-    if (bus_handle == nullptr) {
-        return ESP_FAIL;
-    }
+    ESP_RETURN_ON_FALSE(bus_handle != nullptr, ESP_FAIL, TAG, "BSP I2C bus is unavailable");
 
     i2c_device_config_t dev_config = {};
     dev_config.dev_addr_length = I2C_ADDR_BIT_LEN_7;
     dev_config.device_address = AXP2101_SLAVE_ADDRESS;
     dev_config.scl_speed_hz = PMU_I2C_FREQ_HZ;
-
     return i2c_master_bus_add_device(bus_handle, &dev_config, &pmu_dev_handle);
 }
 
@@ -128,8 +116,6 @@ esp_err_t pmu_chip_init(void)
         return ESP_FAIL;
     }
 
-    ESP_LOGI(TAG, "Init AXP2101 success");
-
     pmu.clearIrqStatus();
     pmu.enableTemperatureMeasure();
     pmu.enableBattDetection();
@@ -137,19 +123,17 @@ esp_err_t pmu_chip_init(void)
     pmu.enableBattVoltageMeasure();
     pmu.enableSystemVoltageMeasure();
     pmu.disableTSPinMeasure();
-
     pmu.disableIRQ(XPOWERS_AXP2101_ALL_IRQ);
     pmu.clearIrqStatus();
     pmu.enableIRQ(XPOWERS_AXP2101_PKEY_NEGATIVE_IRQ | XPOWERS_AXP2101_PKEY_POSITIVE_IRQ);
     pmu.disableLongPressShutdown();
-
     pmu.setPrechargeCurr(XPOWERS_AXP2101_PRECHARGE_50MA);
     pmu.setChargerConstantCurr(XPOWERS_AXP2101_CHG_CUR_300MA);
     pmu.setChargerTerminationCurr(XPOWERS_AXP2101_CHG_ITERM_25MA);
     pmu.enableChargerTerminationLimit();
     pmu.setChargeTargetVoltage(XPOWERS_AXP2101_CHG_VOL_4V2);
     pmu.enableCellbatteryCharge();
-
+    ESP_LOGI(TAG, "AXP2101 initialized");
     return ESP_OK;
 }
 
@@ -159,17 +143,42 @@ extern "C" esp_err_t pmu_power_init(void)
 {
     if (pmu_mutex == nullptr) {
         pmu_mutex = xSemaphoreCreateMutex();
-        ESP_RETURN_ON_FALSE(pmu_mutex != nullptr, ESP_ERR_NO_MEM, TAG, "Failed to create PMU mutex");
+        ESP_RETURN_ON_FALSE(pmu_mutex != nullptr, ESP_ERR_NO_MEM, TAG,
+                            "Failed to create PMU mutex");
     }
 
     ESP_RETURN_ON_ERROR(pmu_i2c_device_init(), TAG, "Failed to add PMU I2C device");
     return pmu_chip_init();
 }
 
-extern "C" esp_err_t pmu_power_read_data(pmu_power_data_t * data)
+extern "C" esp_err_t pmu_power_deinit(void)
+{
+    if (pmu_mutex == nullptr) {
+        return ESP_OK;
+    }
+    if (!take_pmu_mutex(portMAX_DELAY)) {
+        return ESP_ERR_TIMEOUT;
+    }
+
+    esp_err_t ret = ESP_OK;
+    if (pmu_dev_handle != nullptr) {
+        ret = i2c_master_bus_rm_device(pmu_dev_handle);
+        if (ret == ESP_OK) {
+            pmu_dev_handle = nullptr;
+        }
+    }
+
+    give_pmu_mutex();
+    if (ret == ESP_OK) {
+        vSemaphoreDelete(pmu_mutex);
+        pmu_mutex = nullptr;
+    }
+    return ret;
+}
+
+extern "C" esp_err_t pmu_power_read_data(pmu_power_data_t *data)
 {
     ESP_RETURN_ON_FALSE(data != nullptr, ESP_ERR_INVALID_ARG, TAG, "Invalid PMU data pointer");
-
     if (!take_pmu_mutex(pdMS_TO_TICKS(PMU_MUTEX_TIMEOUT_MS))) {
         return ESP_ERR_TIMEOUT;
     }
@@ -190,11 +199,12 @@ extern "C" esp_err_t pmu_power_read_data(pmu_power_data_t * data)
     return ESP_OK;
 }
 
-extern "C" esp_err_t pmu_power_poll_button(bool * pressed_edge, bool * released_edge)
+extern "C" esp_err_t pmu_power_poll_button(bool *pressed_edge, bool *released_edge)
 {
-    ESP_RETURN_ON_FALSE(pressed_edge != nullptr, ESP_ERR_INVALID_ARG, TAG, "Invalid pressed_edge pointer");
-    ESP_RETURN_ON_FALSE(released_edge != nullptr, ESP_ERR_INVALID_ARG, TAG, "Invalid released_edge pointer");
-
+    ESP_RETURN_ON_FALSE(pressed_edge != nullptr, ESP_ERR_INVALID_ARG, TAG,
+                        "Invalid pressed_edge pointer");
+    ESP_RETURN_ON_FALSE(released_edge != nullptr, ESP_ERR_INVALID_ARG, TAG,
+                        "Invalid released_edge pointer");
     *pressed_edge = false;
     *released_edge = false;
 

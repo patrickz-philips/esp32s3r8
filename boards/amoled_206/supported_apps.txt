@@ -1,0 +1,4 @@
+slide_player
+salary_cat
+acc_data
+battery_monitor

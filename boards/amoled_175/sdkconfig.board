@@ -1,3 +1,6 @@
 # Board-specific sdkconfig overrides for AMOLED 1.75" (applied after sdkconfig.defaults).
 CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
 CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="boards/amoled_175/partitions.csv"
+# The 1.75 BSP uses a 50-row PSRAM double buffer. Keep its QSPI clock at the BSP
+# default; no display communication-frequency override belongs in this profile.
+CONFIG_BSP_DISPLAY_LVGL_BUF_HEIGHT=50

@@ -23,6 +23,35 @@ read_cur() { if [ -f "$1" ]; then tr -d '[:space:]' <"$1"; else printf '%s' "$2"
 cur_board="$(read_cur .board "${BOARDS[0]}")"
 cur_proj="$(read_cur .lvgl_project "${PROJECTS[0]}")"
 
+load_supported_apps() {
+    supported_file="boards/$1/supported_apps.txt"
+    if [ ! -f "$supported_file" ]; then
+        echo "Missing board compatibility file: $supported_file" >&2
+        exit 1
+    fi
+
+    BOARD_SUPPORTED_APPS=()
+    while IFS= read -r supported_app || [ -n "$supported_app" ]; do
+        case "$supported_app" in
+            "" | \#*) continue ;;
+        esac
+        BOARD_SUPPORTED_APPS+=("$supported_app")
+    done <"$supported_file"
+
+    if [ "${#BOARD_SUPPORTED_APPS[@]}" -eq 0 ]; then
+        echo "No supported apps declared in $supported_file" >&2
+        exit 1
+    fi
+}
+
+is_app_compatible() {
+    candidate="$1"
+    for supported_app in "${BOARD_SUPPORTED_APPS[@]}"; do
+        [ "$supported_app" = "$candidate" ] && return 0
+    done
+    return 1
+}
+
 # --- Step 1: board ----------------------------------------------------------
 echo "Step 1/2 - Select board (current: $cur_board)"
 for i in "${!BOARDS[@]}"; do
@@ -44,14 +73,22 @@ while true; do
     esac
 done
 
+load_supported_apps "$board"
+project="$cur_proj"
+if ! is_app_compatible "$project"; then
+    project="${BOARD_SUPPORTED_APPS[0]}"
+    echo "  '$cur_proj' is incompatible with $board; defaulting to '$project'."
+fi
+
 # --- Step 2: lvgl project ---------------------------------------------------
 echo
 echo "Step 2/2 - Select lvgl project (current: $cur_proj)"
 for i in "${!PROJECTS[@]}"; do
-    mark="  "; [ "${PROJECTS[$i]}" = "$cur_proj" ] && mark="=>"
-    printf "  %s %d) %-16s %s\n" "$mark" "$((i + 1))" "${PROJECTS[$i]}" "${PROJ_DESC[$i]}"
+    app_label="${PROJECTS[$i]}"
+    is_app_compatible "${PROJECTS[$i]}" || app_label="$app_label (Incompatible)"
+    mark="  "; [ "${PROJECTS[$i]}" = "$project" ] && mark="=>"
+    printf "  %s %d) %-31s %s\n" "$mark" "$((i + 1))" "$app_label" "${PROJ_DESC[$i]}"
 done
-project="$cur_proj"
 while true; do
     printf "  number / Enter=keep / q=quit: "
     read -r c || c="q"
@@ -60,7 +97,12 @@ while true; do
         "") break ;;
         *)
             if [ "$c" -eq "$c" ] 2>/dev/null && [ "$c" -ge 1 ] && [ "$c" -le "${#PROJECTS[@]}" ]; then
-                project="${PROJECTS[$((c - 1))]}"; break
+                candidate="${PROJECTS[$((c - 1))]}"
+                if is_app_compatible "$candidate"; then
+                    project="$candidate"; break
+                fi
+                echo "  incompatible: '$candidate' is not supported on '$board'"
+                continue
             fi
             echo "  invalid: '$c'" ;;
     esac

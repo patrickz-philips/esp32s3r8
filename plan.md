@@ -24,13 +24,17 @@ Each `boards/<board>/` directory owns only hardware-specific material:
 - The board README must include this GPIO allocation table:
 
   | GPIO | Signal/Function | Peripheral/Sensor | Bus | Direction | Shared/Conflict | Source |
-  |------|-----------------|-------------------|-----|-----------|-----------------|--------|
+  |:-----|:----------------|:------------------|:----|:----------|:----------------|:-------|
 
   Include every occupied GPIO, associate each signal with its sensor or
   peripheral, and identify shared, multiplexed, boot-strapping, or otherwise
   constrained pins. Use `N/A` rather than omitting a field. Every row must be
   traceable to an official schematic, BSP definition, datasheet, or explicit
   user-provided custom-board specification.
+- Every board README table must explicitly left-align all columns with `:---`
+  separator cells. Group wide GPIO tables by hardware function, repeat the full
+  header for each group, keep cells concise, and use a defined short source
+  token in each row so the rendered documentation remains easy to scan.
 - The board README must also list on-board sensors or peripherals that do not
   consume an ESP GPIO directly, with their controlling bus, address or chip
   select, interrupt/reset signals when applicable, and a reference to the GPIO

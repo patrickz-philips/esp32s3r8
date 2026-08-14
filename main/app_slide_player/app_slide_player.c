@@ -39,11 +39,7 @@ static TaskHandle_t s_reader_task_handle;
 
 static bool display_lock_forever(void)
 {
-#if defined(SLIDE_PLAYER_BOARD_AMOLED_175)
     return bsp_display_lock(UINT32_MAX) == ESP_OK;
-#else
-    return bsp_display_lock(UINT32_MAX);
-#endif
 }
 
 static bool build_slide_path(uint32_t slide_index, char * output, size_t output_size)

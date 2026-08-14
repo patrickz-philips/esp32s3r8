@@ -2,9 +2,11 @@
 ## The AXP2101 PMU driver is the local components/XPowersLib; LVGL comes from the
 ## common main/idf_component.yml.
 dependencies:
-  # BSP: SH8601 display, FT5x06 touch, esp_codec_dev, esp_lvgl_port, SD/I2C wiring.
+  # Version-controlled override: CO5300 display, GPIO TE sync, FT5x06 touch,
+  # esp_codec_dev, SD/I2C wiring, and the existing public BSP API.
   waveshare/esp32_s3_touch_amoled_2_06:
     version: "2.0.0"
+    override_path: "bsp_override/waveshare__esp32_s3_touch_amoled_2_06"
   # On-board QMI8658 6-axis IMU driver.
   waveshare/qmi8658:
     version: "1.0.0"

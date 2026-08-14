@@ -33,11 +33,7 @@ static TaskHandle_t s_task_audio_handle;
 
 static bool display_lock_forever(void)
 {
-#if defined(SALARY_CAT_BOARD_AMOLED_175)
     return bsp_display_lock(UINT32_MAX) == ESP_OK;
-#else
-    return bsp_display_lock(UINT32_MAX);
-#endif
 }
 
 static int adjust_volume(int delta, void *user_ctx)
@@ -132,7 +128,19 @@ void app_main(void)
         .user_ctx = NULL,
     };
 
-    if (bsp_display_start() == NULL) {
+#if defined(SALARY_CAT_BOARD_AMOLED_206)
+    bsp_display_cfg_t display_config = {
+        .lv_adapter_cfg = ESP_LV_ADAPTER_DEFAULT_CONFIG(),
+        .rotation = ESP_LV_ADAPTER_ROTATE_0,
+        .tear_avoid_mode = ESP_LV_ADAPTER_TEAR_AVOID_MODE_TE_SYNC,
+        .buffer_height = 144,
+        .use_psram = false,
+    };
+    lv_display_t *display = bsp_display_start_with_config(&display_config);
+#else
+    lv_display_t *display = bsp_display_start();
+#endif
+    if (display == NULL) {
         ESP_LOGE(TAG, "Display initialization failed");
         return;
     }

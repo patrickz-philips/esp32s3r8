@@ -96,7 +96,7 @@ if(LVGL_PROJECT STREQUAL "slide_player")
     list(APPEND EXCLUDE_COMPONENTS pmu_power)
 endif()
 
-# Register only the selected board and app dependency components.
+# Register only the selected board and app components.
 set(EXTRA_COMPONENT_DIRS "${BOARD_DIR}" "${APP_DIR}")
 
 # Per-board generated config + layered defaults (board file overrides common).

@@ -20,6 +20,18 @@ applyTo: "boards/**"
   genuinely needed. Prefer the vendor BSP over copied driver implementations.
 - Declare BSP and on-board hardware dependencies only. Do not add PNG, GIF, MP3,
   or other app-only dependencies to a board manifest.
+- BSP overrides (when upstream BSP or managed component behavior must change):
+  - Never edit `managed_components/` in place. It is git-ignored and regenerated
+    per selected board, so edits are lost and never reach a fresh clone.
+  - Place the overriding source under `boards/<board>/bsp_override/<component>`
+    and wire it through `override_path` in the board `idf_component.yml`. Chain
+    further overrides (for example `esp_lvgl_adapter`) with `override_path` from
+    the BSP manifest, not by patching `managed_components/`.
+  - Commit every `bsp_override/` component; it is the source of truth for that
+    board. A component reached through `override_path` is NOT downloaded into
+    `managed_components/`, so an uncommitted override breaks a fresh clone build.
+  - Keep the override minimal and record why it diverges from upstream: the
+    vendor version, the upstream `commit_sha`, and the specific fix or reason.
 - Document in English: board and SoC identity, flash/PSRAM, display and touch,
   GPIO table, buses, sensors, storage, audio, PMU, dependency versions,
   partition layout, supported apps, initialization notes, and known limits.

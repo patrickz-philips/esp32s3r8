@@ -316,15 +316,11 @@ static lv_display_t * display_start(void)
 {
 #if defined(ACC_DATA_BOARD_AMOLED_206)
     bsp_display_cfg_t display_config = {
-        .lvgl_port_cfg = ESP_LVGL_PORT_INIT_CONFIG(),
-        .buffer_size = BSP_LCD_DRAW_BUFF_SIZE,
-        .double_buffer = BSP_LCD_DRAW_BUFF_DOUBLE,
-        .flags = {
-            .buff_dma = false,
-            .buff_spiram = true,
-        },
+        .lv_adapter_cfg = ESP_LV_ADAPTER_DEFAULT_CONFIG(),
+        .rotation = ESP_LV_ADAPTER_ROTATE_0,
+        .tear_avoid_mode = ESP_LV_ADAPTER_TEAR_AVOID_MODE_TE_SYNC,
     };
-    display_config.lvgl_port_cfg.task_affinity = LVGL_TASK_CORE;
+    display_config.lv_adapter_cfg.task_core_id = LVGL_TASK_CORE;
     return bsp_display_start_with_config(&display_config);
 #else
     return bsp_display_start();
@@ -333,11 +329,7 @@ static lv_display_t * display_start(void)
 
 static bool display_lock_forever(void)
 {
-#if defined(ACC_DATA_BOARD_AMOLED_175)
     return bsp_display_lock(UINT32_MAX) == ESP_OK;
-#else
-    return bsp_display_lock(UINT32_MAX);
-#endif
 }
 
 void app_main(void)

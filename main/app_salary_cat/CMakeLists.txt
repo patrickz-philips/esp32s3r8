@@ -27,4 +27,6 @@ target_compile_definitions(${COMPONENT_LIB} PRIVATE LVGL_IN_USED=1)
 
 if("$ENV{SELECTED_BOARD}" STREQUAL "amoled_175")
 	target_compile_definitions(${COMPONENT_LIB} PRIVATE SALARY_CAT_BOARD_AMOLED_175=1)
+elseif("$ENV{SELECTED_BOARD}" STREQUAL "amoled_206")
+	target_compile_definitions(${COMPONENT_LIB} PRIVATE SALARY_CAT_BOARD_AMOLED_206=1)
 endif()

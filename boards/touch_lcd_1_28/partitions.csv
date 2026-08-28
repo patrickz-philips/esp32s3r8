@@ -1,0 +1,6 @@
+# Name,   Type, SubType, Offset,  Size, Flags
+# 16 MB flash. acc_data has no SD/SPIFFS assets, so no storage partition is
+# needed; the factory app owns the bulk of the flash.
+nvs,      data, nvs,     0x9000,  0x6000,
+phy_init, data, phy,     0xf000,  0x1000,
+factory,  app,  factory, 0x10000, 4M,

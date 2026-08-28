@@ -1,0 +1,12 @@
+# Board-specific sdkconfig overrides for ESP32-S3-Touch-LCD-1.28 (applied after
+# sdkconfig.defaults).
+CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="boards/touch_lcd_1_28/partitions.csv"
+
+# ESP32-S3R2 carries 2 MB *Quad* PSRAM. sdkconfig.defaults selects Octal mode
+# for the AMOLED (R8) boards, which would fail PSRAM init here; force Quad.
+CONFIG_SPIRAM_MODE_QUAD=y
+# CONFIG_SPIRAM_MODE_OCT is not set
+
+# The round GC9A01 has no vendor BSP Kconfig; keep the LVGL perf overlay off.
+# CONFIG_LV_USE_PERF_MONITOR is not set

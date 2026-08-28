@@ -25,7 +25,7 @@ function(resolve_selection var file default)
     set(${var} "${want}" CACHE STRING "" FORCE)
 endfunction()
 
-set(SUPPORTED_BOARDS amoled_175 amoled_206)
+set(SUPPORTED_BOARDS amoled_175 amoled_206 touch_lcd_1_28)
 set(SUPPORTED_PROJECTS slide_player salary_cat acc_data battery_monitor)
 
 resolve_selection(BOARD "${CMAKE_CURRENT_LIST_DIR}/.board" amoled_175)
@@ -76,6 +76,19 @@ if(BOARD STREQUAL "amoled_175")
     set(SELECTED_BSP_COMPONENT "waveshare__esp32_s3_touch_amoled_1_75")
 elseif(BOARD STREQUAL "amoled_206")
     set(SELECTED_BSP_COMPONENT "waveshare__esp32_s3_touch_amoled_2_06")
+elseif(BOARD STREQUAL "touch_lcd_1_28")
+    # This board owns its BSP: the board component compiles bsp/ directly, so it
+    # is its own BSP component (no vendor package on the ESP Component Registry).
+    set(SELECTED_BSP_COMPONENT "touch_lcd_1_28")
+endif()
+
+# Export BOARD_HAS_SD so app components can drop SD-only sources and the sdmmc
+# dependency for boards without a micro-SD slot. Default to 1 when absent.
+file(READ "${BOARD_DIR}/board_config.h" BOARD_CONFIG_CONTENT)
+if(BOARD_CONFIG_CONTENT MATCHES "BOARD_HAS_SD[^0-9]*([0-9]+)")
+    set(ENV{BOARD_HAS_SD} "${CMAKE_MATCH_1}")
+else()
+    set(ENV{BOARD_HAS_SD} "1")
 endif()
 
 # Component requirement expansion runs in a child CMake process. Export the

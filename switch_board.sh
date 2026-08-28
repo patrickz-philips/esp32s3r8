@@ -6,10 +6,11 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-BOARDS=(amoled_175 amoled_206)
+BOARDS=(amoled_175 amoled_206 touch_lcd_1_28)
 BOARD_DESC=(
     "Waveshare ESP32-S3 Touch AMOLED 1.75\""
     "Waveshare ESP32-S3 Touch AMOLED 2.06\""
+    "Waveshare ESP32-S3 Touch LCD 1.28\" (round, IMU-only)"
 )
 PROJECTS=(slide_player salary_cat acc_data battery_monitor)
 PROJ_DESC=(

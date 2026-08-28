@@ -12,8 +12,12 @@
 #include "acc_data.h"
 #include "imu.h"
 #include "model.h"
+#if BOARD_HAS_PMU
 #include "pmu_power.h"
+#endif
+#if BOARD_HAS_SD
 #include "sd_acc_writer.h"
+#endif
 #endif
 
 #ifdef LVGL_IN_USED
@@ -25,14 +29,20 @@ static const BaseType_t LVGL_TASK_CORE = 0;
 static const uint32_t PRESS_SCAN_PERIOD_MS = 10U;
 static const uint32_t BUTTON_DEBOUNCE_MS = 30U;
 static const uint32_t BUTTON_LONG_PRESS_MS = 1500U;
+#if BOARD_HAS_PMU
 static const uint32_t PWRON_SHUTDOWN_PRESS_MS = 3000U;
+#endif
 #if BOARD_HAS_HAPTIC
 static const uint32_t HAPTIC_PULSE_MS = 40U;
 #endif
 static const uint32_t IMU_POLL_PERIOD_MS = 20U;
+#if BOARD_HAS_SD
 static const uint32_t SD_DROP_LOG_PERIOD_MS = 1000U;
+#endif
 
+#if BOARD_HAS_PMU
 static const UBaseType_t TASK_PMU_PRIORITY = 1U;
+#endif
 static const UBaseType_t TASK_IMU_PRIORITY = 2U;
 static const UBaseType_t TASK_PRESS_PRIORITY = 2U;
 #if BOARD_HAS_HAPTIC
@@ -40,7 +50,9 @@ static const UBaseType_t TASK_HAPTIC_PRIORITY = 3U;
 #endif
 static const UBaseType_t TASK_LVGL_PRIORITY = 4U;
 
+#if BOARD_HAS_PMU
 static const uint32_t TASK_PMU_STACK_SIZE = 4096U;
+#endif
 static const uint32_t TASK_IMU_STACK_SIZE = 4096U;
 static const uint32_t TASK_PRESS_STACK_SIZE = 4096U;
 #if BOARD_HAS_HAPTIC
@@ -62,7 +74,9 @@ typedef struct {
     TickType_t press_start_tick;
 } debounced_button_t;
 
+#if BOARD_HAS_PMU
 static TaskHandle_t s_task_pmu_handle;
+#endif
 static TaskHandle_t s_task_imu_handle;
 static TaskHandle_t s_task_press_handle;
 #if BOARD_HAS_HAPTIC
@@ -131,6 +145,7 @@ static void process_boot_button(debounced_button_t * state)
                                                                              : MODEL_BUTTON_PRESS_SHORT);
 }
 
+#if BOARD_HAS_PMU
 static void process_pwron_button(debounced_button_t * state)
 {
     bool pressed_edge = false;
@@ -180,13 +195,16 @@ static void task_pmu(void * arg)
         vTaskDelayUntil(&last_wake_tick, pdMS_TO_TICKS(1000U));
     }
 }
+#endif /* BOARD_HAS_PMU */
 
 static void task_imu(void * arg)
 {
     imu_acc_data_t data = {0};
     bool first_sample_logged = false;
+#if BOARD_HAS_SD
     uint32_t dropped_sd_samples = 0U;
     TickType_t last_sd_drop_log_tick = xTaskGetTickCount() - pdMS_TO_TICKS(SD_DROP_LOG_PERIOD_MS);
+#endif
     (void)arg;
 
     TickType_t last_wake_tick = xTaskGetTickCount();
@@ -205,6 +223,7 @@ static void task_imu(void * arg)
                          (int)sample.x, (int)sample.y, (int)sample.z);
                 first_sample_logged = true;
             }
+#if BOARD_HAS_SD
             if (!sd_acc_writer_post_sample(&sample)) {
                 dropped_sd_samples++;
                 const TickType_t now = xTaskGetTickCount();
@@ -215,6 +234,7 @@ static void task_imu(void * arg)
                     last_sd_drop_log_tick = now;
                 }
             }
+#endif
         } else {
             ESP_LOGW(TAG, "taskIMU skipped one sample: %s", esp_err_to_name(ret));
         }
@@ -228,7 +248,9 @@ static void task_press(void * arg)
     (void)arg;
 
     debounced_button_t boot_button = {0};
+#if BOARD_HAS_PMU
     debounced_button_t pwron_button = {0};
+#endif
 
     boot_button.sampled_pressed = gpio_get_level(BOOT_BUTTON_GPIO) == 0;
     boot_button.stable_pressed = boot_button.sampled_pressed;
@@ -238,7 +260,9 @@ static void task_press(void * arg)
     TickType_t last_wake_tick = xTaskGetTickCount();
     while (true) {
         process_boot_button(&boot_button);
+#if BOARD_HAS_PMU
         process_pwron_button(&pwron_button);
+#endif
         vTaskDelayUntil(&last_wake_tick, pdMS_TO_TICKS(PRESS_SCAN_PERIOD_MS));
     }
 }
@@ -261,8 +285,10 @@ static esp_err_t acc_data_tasks_start(void)
 {
     BaseType_t ret;
 
-    if (s_task_pmu_handle != NULL && s_task_imu_handle != NULL &&
-        s_task_press_handle != NULL
+    if (s_task_imu_handle != NULL && s_task_press_handle != NULL
+#if BOARD_HAS_PMU
+        && s_task_pmu_handle != NULL
+#endif
 #if BOARD_HAS_HAPTIC
         && s_task_haptic_handle != NULL
 #endif
@@ -270,7 +296,9 @@ static esp_err_t acc_data_tasks_start(void)
         return ESP_OK;
     }
 
+#if BOARD_HAS_PMU
     ESP_RETURN_ON_ERROR(pmu_power_init(), TAG, "Failed to initialize PMU");
+#endif
     ESP_RETURN_ON_ERROR(imu_init(), TAG, "Failed to initialize IMU");
     ESP_RETURN_ON_ERROR(button_gpio_init(), TAG, "Failed to configure GPIO0 button");
 #if BOARD_HAS_HAPTIC
@@ -285,28 +313,35 @@ static esp_err_t acc_data_tasks_start(void)
                       TASK_PRESS_PRIORITY, &s_task_press_handle);
     ESP_RETURN_ON_FALSE(ret == pdPASS, ESP_ERR_NO_MEM, TAG, "Failed to create taskPress");
 
+#if BOARD_HAS_PMU
     ret = xTaskCreate(task_pmu, "taskPMU", TASK_PMU_STACK_SIZE, NULL,
                       TASK_PMU_PRIORITY, &s_task_pmu_handle);
     ESP_RETURN_ON_FALSE(ret == pdPASS, ESP_ERR_NO_MEM, TAG, "Failed to create taskPMU");
+#endif
 
     ret = xTaskCreate(task_imu, "taskIMU", TASK_IMU_STACK_SIZE, NULL,
                       TASK_IMU_PRIORITY, &s_task_imu_handle);
     ESP_RETURN_ON_FALSE(ret == pdPASS, ESP_ERR_NO_MEM, TAG, "Failed to create taskIMU");
 
+    ESP_LOGI(TAG, "Task priorities: taskLVGL=%u"
 #if BOARD_HAS_HAPTIC
-    ESP_LOGI(TAG, "Task priorities: taskLVGL=%u, taskHaptic=%u, taskPress=%u, taskIMU=%u, taskPMU=%u",
-             (unsigned int)TASK_LVGL_PRIORITY,
-             (unsigned int)TASK_HAPTIC_PRIORITY,
-             (unsigned int)TASK_PRESS_PRIORITY,
-             (unsigned int)TASK_IMU_PRIORITY,
-             (unsigned int)TASK_PMU_PRIORITY);
-#else
-    ESP_LOGI(TAG, "Task priorities: taskLVGL=%u, taskPress=%u, taskIMU=%u, taskPMU=%u",
-             (unsigned int)TASK_LVGL_PRIORITY,
-             (unsigned int)TASK_PRESS_PRIORITY,
-             (unsigned int)TASK_IMU_PRIORITY,
-             (unsigned int)TASK_PMU_PRIORITY);
+                  ", taskHaptic=%u"
 #endif
+                  ", taskPress=%u, taskIMU=%u"
+#if BOARD_HAS_PMU
+                  ", taskPMU=%u"
+#endif
+             ,
+             (unsigned int)TASK_LVGL_PRIORITY,
+#if BOARD_HAS_HAPTIC
+             (unsigned int)TASK_HAPTIC_PRIORITY,
+#endif
+             (unsigned int)TASK_PRESS_PRIORITY,
+             (unsigned int)TASK_IMU_PRIORITY
+#if BOARD_HAS_PMU
+             , (unsigned int)TASK_PMU_PRIORITY
+#endif
+             );
 
     return ESP_OK;
 }
@@ -352,7 +387,9 @@ void app_main(void)
     bsp_display_unlock();
 
 #ifdef LVGL_IN_USED
+#if BOARD_HAS_SD
     ESP_ERROR_CHECK(sd_acc_writer_init());
+#endif
     ESP_ERROR_CHECK(acc_data_tasks_start());
 #endif
 }

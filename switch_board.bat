@@ -2,11 +2,13 @@
 setlocal EnableExtensions EnableDelayedExpansion
 cd /d "%~dp0"
 
-set "BOARD_COUNT=2"
+set "BOARD_COUNT=3"
 set "BOARD_1=amoled_175"
 set "BOARD_2=amoled_206"
+set "BOARD_3=touch_lcd_1_28"
 set "BOARD_DESC_1=Waveshare ESP32-S3 Touch AMOLED 1.75\""
 set "BOARD_DESC_2=Waveshare ESP32-S3 Touch AMOLED 2.06\""
+set "BOARD_DESC_3=Waveshare ESP32-S3 Touch LCD 1.28\" (round, IMU-only)"
 
 set "PROJECT_COUNT=4"
 set "PROJECT_1=slide_player"

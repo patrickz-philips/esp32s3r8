@@ -1,0 +1,4 @@
+# Apps compatible with Waveshare ESP32-S3-Touch-LCD-1.28.
+# See README.md for the exclusion rationale (no SD, no AXP2101 PMU, no audio).
+# acc_data runs IMU-only here: the PMU and SD-logging paths are guarded off.
+acc_data
